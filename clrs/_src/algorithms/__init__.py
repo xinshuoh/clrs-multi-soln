@@ -42,6 +42,11 @@ from clrs._src.algorithms.graphs import dag_shortest_paths
 from clrs._src.algorithms.graphs import floyd_warshall
 from clrs._src.algorithms.graphs import bipartite_matching
 
+# New multi-solution variants
+from clrs._src.algorithms.graphs import dfs_multi
+from clrs._src.algorithms.graphs import bfs_multi
+from clrs._src.algorithms.graphs import bellman_ford_multi
+
 from clrs._src.algorithms.greedy import activity_selector
 from clrs._src.algorithms.greedy import task_scheduling
 

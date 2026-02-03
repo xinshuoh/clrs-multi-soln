@@ -16,4 +16,6 @@ torch>=2.8
 scikit-learn>=1.6
 pandas>=2.3
 matplotlib>=3.9
-sciplotlib>=0.07
+sciplotlib>=0.0.7
+flax
+# protobuf==3.20.1

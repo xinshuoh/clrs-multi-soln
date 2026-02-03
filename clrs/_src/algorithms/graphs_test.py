@@ -37,6 +37,19 @@ DAG = np.array([
     [0, 0, 0, 0, 0],
 ])
 
+# Directed graph
+# Looks like:
+#     0
+#   /  \
+#  v    v
+#  1 <- 3
+#   \  ^
+#   v / 
+#    4 <- 2 -> 5 (self loop)
+#
+# DFS should get [0,0,2,4,1,2]
+# BFS should get [0,0,2,0,1,5]
+
 DIRECTED = np.array([
     [0, 1, 0, 1, 0, 0],
     [0, 0, 0, 0, 1, 0],
@@ -45,6 +58,15 @@ DIRECTED = np.array([
     [0, 0, 0, 1, 0, 0],
     [0, 0, 0, 0, 0, 1],
 ])
+
+# Undirected graph
+# Looks like:
+# 0 - 1 - 2
+#  \ / \ /
+#   4 - 3
+#
+# DFS should get [0,0,1,2,3]
+# BFS should get [0,0,1,1,0]
 
 UNDIRECTED = np.array([
     [0, 1, 0, 0, 1],
@@ -77,7 +99,15 @@ WEIGHTED_DAG = np.array([
 
 WEIGHTED_DIRECTED = np.array([
     [X, 9, 3, X, X],
-    [X, X, 6, X, 1],
+    [X, X, 6, X, 2],
+    [X, 2, X, 1, X],
+    [X, X, 2, X, 2],
+    [X, X, X, X, X],
+])
+
+WEIGHTED_DIRECTED_2 = np.array([
+    [X, 9, 3, X, X],
+    [X, X, 6, X, 1], # Allow multiple solutions: change 1->4 edge cost from 2 to 1
     [X, 2, X, 1, X],
     [X, X, 2, X, 2],
     [X, X, X, X, X],
@@ -131,6 +161,28 @@ class GraphsTest(absltest.TestCase):
     out, _ = graphs.dfs(UNDIRECTED)
     np.testing.assert_array_equal(expected_undirected, out)
 
+  def test_dfs_multi(self):
+    expected_directed = np.array([
+      [1., 0., 0., 0., 0., 0.],
+      [0.5, 0., 0., 0.5, 0., 0.],
+      [0., 0., 1., 0., 0., 0.],
+      [0.5, 0., 0., 0., 0.5, 0.],
+      [0., 1., 0., 0., 0., 0.],
+      [0., 0., 1., 0., 0., 0.]
+    ])
+    out, _ = graphs.dfs_multi(DIRECTED, seed=3)
+    np.testing.assert_array_equal(expected_directed, out)
+
+    expected_undirected = np.array([
+      [1., 0., 0., 0., 0.],
+      [0.45, 0., 0.2, 0.15, 0.2],
+      [0., 0.45, 0., 0.55, 0.],
+      [0., 0.3, 0.3, 0., 0.4],
+      [0.55, 0.05, 0., 0.4, 0.]
+    ])
+    out, _ = graphs.dfs_multi(UNDIRECTED, seed=3)
+    np.testing.assert_array_equal(expected_undirected, out)
+
   def test_bfs(self):
     expected_directed = np.array([0, 0, 2, 0, 1, 5])
     out, _ = graphs.bfs(DIRECTED, 0)
@@ -139,6 +191,29 @@ class GraphsTest(absltest.TestCase):
     expected_undirected = np.array([0, 0, 1, 1, 0])
     out, _ = graphs.bfs(UNDIRECTED, 0)
     np.testing.assert_array_equal(expected_undirected, out)
+
+  def test_bfs_multi(self):
+    expected_directed = np.array([
+      [1., 0., 0., 0., 0., 0.],
+      [1., 0., 0., 0., 0., 0.],
+      [0., 0., 1., 0., 0., 0.],
+      [1., 0., 0., 0., 0., 0.],
+      [0., 1., 0., 0., 0., 0.],
+      [0., 0., 0., 0., 0., 1.]
+    ])
+    out, _ = graphs.bfs_multi(DIRECTED, 0, seed=3)
+    np.testing.assert_array_equal(expected_directed, out)
+
+    expected_undirected = np.array([
+      [1., 0., 0., 0., 0.],
+      [1., 0., 0., 0., 0.],
+      [0., 1., 0., 0., 0.],
+      [0., 0.5, 0., 0., 0.5],
+      [1., 0., 0., 0., 0.]
+    ])
+    out, _ = graphs.bfs_multi(UNDIRECTED, 0, seed=3)
+    np.testing.assert_array_equal(expected_undirected, out)
+
 
   def test_topological_sort(self):
     expected_dag = np.array([3, 4, 0, 1, 4])
@@ -189,6 +264,18 @@ class GraphsTest(absltest.TestCase):
   def test_bellman_ford(self):
     expected = np.array([0, 2, 0, 2, 3])
     out, _ = graphs.bellman_ford(WEIGHTED_DIRECTED, 0)
+    print(out)
+    np.testing.assert_array_equal(expected, out)
+
+  def test_bellman_ford_multi(self):
+    expected = np.array([
+        [1., 0., 0., 0., 0.],
+        [0., 0., 1., 0., 0.],
+        [1., 0., 0., 0., 0.],
+        [0., 0., 1., 0., 0.],
+        [0., 0.6, 0., 0.4, 0.],
+    ])
+    out, _ = graphs.bellman_ford_multi(WEIGHTED_DIRECTED_2, 0, seed=0)
     print(out)
     np.testing.assert_array_equal(expected, out)
 

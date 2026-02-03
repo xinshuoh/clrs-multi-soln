@@ -96,6 +96,9 @@ CLRS_30_ALGS = [
     'strongly_connected_components',
     'task_scheduling',
     'topological_sort',
+    'dfs_multi',
+    'bfs_multi',
+    'bellman_ford_multi',
 ]
 
 
@@ -276,6 +279,23 @@ SPECS = types.MappingProxyType({
         'pos': (Stage.INPUT, Location.NODE, Type.SCALAR),
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
         'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
+        'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
+        # 'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL), # matrix of probabilities
+        'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
+        'color': (Stage.HINT, Location.NODE, Type.CATEGORICAL),
+        'd': (Stage.HINT, Location.NODE, Type.SCALAR),
+        'f': (Stage.HINT, Location.NODE, Type.SCALAR),
+        's_prev': (Stage.HINT, Location.NODE, Type.POINTER),
+        's': (Stage.HINT, Location.NODE, Type.MASK_ONE),
+        'u': (Stage.HINT, Location.NODE, Type.MASK_ONE),
+        'v': (Stage.HINT, Location.NODE, Type.MASK_ONE),
+        's_last': (Stage.HINT, Location.NODE, Type.MASK_ONE),
+        'time': (Stage.HINT, Location.GRAPH, Type.SCALAR)
+    },
+    'dfs_multi': {
+        'pos': (Stage.INPUT, Location.NODE, Type.SCALAR),
+        'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
+        'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
         #'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
         'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL), # matrix of probabilities
         'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
@@ -365,6 +385,17 @@ SPECS = types.MappingProxyType({
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
         'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
         'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
+        # 'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL), # matrix of probabilities
+        'reach_h': (Stage.HINT, Location.NODE, Type.MASK),
+        'pi_h': (Stage.HINT, Location.NODE, Type.POINTER)
+    },
+    'bfs_multi': {
+        'pos': (Stage.INPUT, Location.NODE, Type.SCALAR),
+        's': (Stage.INPUT, Location.NODE, Type.MASK_ONE),
+        'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
+        'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
+        # 'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
+        'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL), # matrix of probabilities
         'reach_h': (Stage.HINT, Location.NODE, Type.MASK),
         'pi_h': (Stage.HINT, Location.NODE, Type.POINTER)
     },
@@ -400,6 +431,18 @@ SPECS = types.MappingProxyType({
         's': (Stage.INPUT, Location.NODE, Type.MASK_ONE),
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
         'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
+        'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
+        # 'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL),
+        'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
+        'd': (Stage.HINT, Location.NODE, Type.SCALAR),
+        'msk': (Stage.HINT, Location.NODE, Type.MASK)
+    },
+    'bellman_ford_multi': {
+        'pos': (Stage.INPUT, Location.NODE, Type.SCALAR),
+        's': (Stage.INPUT, Location.NODE, Type.MASK_ONE),
+        'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
+        'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
+        # 'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
         'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL),
         'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
         'd': (Stage.HINT, Location.NODE, Type.SCALAR),

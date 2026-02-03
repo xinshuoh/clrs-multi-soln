@@ -135,7 +135,7 @@ class Sampler(abc.ABC):
     inputs = _batch_io(inputs)
     outputs = _batch_io(outputs)
     hints, lengths = _batch_hints(hints, min_length)
-    #print(f"Inputs: {inputs}, Outputs: {outputs}, Hints: {hints}, Lengths: {lengths}, Algo: {algorithm}")
+    print(f"Inputs: {inputs}, Outputs: {outputs}, Hints: {hints}, Lengths: {lengths}, Algo: {algorithm}")
     return inputs, outputs, hints, lengths
 
   def next(self, batch_size: Optional[int] = None) -> Feedback:
@@ -421,6 +421,23 @@ class DfsSampler(Sampler):
         nb_nodes=length, p=self._rng.choice(p),
         directed=True, acyclic=False, weighted=False)
     return [graph]
+  
+class DfsMultiSampler(Sampler):
+  """DFS sampler that passes seed for multi-solution generation."""
+  
+  def _sample_data(
+      self, 
+      length: int, 
+      p: Tuple[float, ...] = (0.5,),
+    ):
+      graph = self._random_er_graph(
+          nb_nodes=length, p=self._rng.choice(p),
+          directed=True, acyclic=False, weighted=False)
+      
+      # Add deterministic seed for algorithm
+      sub_seed = self._rng.randint(0, 2**31)
+      
+      return [graph, sub_seed]  # ← Extra parameter
 
 
 class BfsSampler(Sampler):
@@ -671,14 +688,17 @@ SAMPLERS = {
     'activity_selector': ActivitySampler,
     'task_scheduling': TaskSampler,
     'dfs': DfsSampler,
+    'dfs_multi': DfsMultiSampler,
     'topological_sort': TopoSampler,
     'strongly_connected_components': SccSampler,
     'articulation_points': ArticulationSampler,
     'bridges': ArticulationSampler,
     'bfs': BfsSampler,
+    'bfs_multi': BfsSampler,
     'mst_kruskal': MSTSampler,
     'mst_prim': BellmanFordSampler,
     'bellman_ford': BellmanFordSampler,
+    'bellman_ford_multi': BellmanFordSampler,
     'dag_shortest_paths': DAGPathSampler,
     'dijkstra': BellmanFordSampler,
     'floyd_warshall': FloydWarshallSampler,

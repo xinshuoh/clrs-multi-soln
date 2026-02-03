@@ -355,7 +355,7 @@ def create_samplers(rng, train_lengths: List[int]):
       train_args = dict(sizes=train_lengths,
                         split='train',
                         batch_size=FLAGS.batch_size,
-                        multiplier=-1,
+                        multiplier=-1, # on-the-fly, unlimited samples
                         randomize_pos=FLAGS.random_pos,
                         chunked=FLAGS.chunked_training,
                         sampler_kwargs=sampler_kwargs,
@@ -524,9 +524,9 @@ def main(unused_argv):
       else:
         examples_in_chunk = len(feedback.features.lengths)
       current_train_items[algo_idx] += examples_in_chunk
-      #logging.info('Algo %s step %i current loss %f, current_train_items %i.',
-      #             FLAGS.algorithms[algo_idx], step,
-      #             cur_loss, current_train_items[algo_idx])
+      logging.info('Algo %s step %i current loss %f, current_train_items %i.',
+                  FLAGS.algorithms[algo_idx], step,
+                  cur_loss, current_train_items[algo_idx])
 
     # Periodically evaluate model
     if step >= next_eval:
@@ -571,10 +571,10 @@ def main(unused_argv):
           ['%s: %.3f' % (x, y) for (x, y) in zip(FLAGS.algorithms, val_scores)])
       if (sum(val_scores) > best_score) or step == 0:
         best_score = sum(val_scores)
-        #logging.info('Checkpointing best model, %s', msg)
+        logging.info('Checkpointing best model, %s', msg)
         train_model.save_model('best.pkl')
       else:
-        #logging.info('Not saving new best model, %s', msg)
+        logging.info('Not saving new best model, %s', msg)
         pass
 
     step += 1
@@ -596,14 +596,14 @@ def main(unused_argv):
 
     new_rng_key, rng_key = jax.random.split(rng_key)
     #breakpoint()
-    if FLAGS.algorithms[algo_idx] == "dfs":
+    if FLAGS.algorithms[algo_idx] == "dfs_multi":
         test_stats = DFS_collect_and_eval(
             test_samplers[algo_idx],
             functools.partial(eval_model.predict, algorithm_index=algo_idx),
             5,#test_sample_counts[algo_idx],
             new_rng_key,
             extras=common_extras, filename=FLAGS.filename, vd_flag=FLAGS.validate_distributions, NSE = FLAGS.NSE)
-    elif FLAGS.algorithms[algo_idx] == 'bellman_ford':
+    elif FLAGS.algorithms[algo_idx] == 'bellman_ford_multi':
         test_stats = BF_collect_and_eval(
             test_samplers[algo_idx],
             functools.partial(eval_model.predict, algorithm_index=algo_idx),

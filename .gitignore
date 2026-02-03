@@ -13,6 +13,8 @@ venv/
 .mypy_cache/
 .pytype/
 .ipynb_checkpoints
+clrs_env/
+.python-version
 
 # Editors
 .idea
