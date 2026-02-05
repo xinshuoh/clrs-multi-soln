@@ -7,6 +7,7 @@ import jax
 import pandas as pd
 
 import clrs._src.dfs_sampling as dfs_sampling
+import clrs._src.bfs_sampling as bfs_sampling
 from clrs._src import dfs_uniqueness_check
 from clrs._src.algorithms import check_graphs, dfs_verification_tester
 from clrs._src.algorithms.BF_beamsearch import sample_beamsearch, sample_greedysearch
@@ -220,6 +221,146 @@ def BF_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, file
         out.update(extras)
     return {k: unpack(v) for k, v in out.items()}
 
+
+###############################################################
+# BFS Multi-Solution
+###############################################################
+
+def BFS_multi_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, 
+                                filename='bfs_accuracy', vd_flag=False, NSE=100):
+    """Collect batches of output and hint preds and evaluate BFS multi-solution."""
+    processed_samples = 0
+    preds = []
+    outputs = []
+    As = []
+    source_nodes = []
+    
+    while processed_samples < sample_count:
+        feedback = next(sampler)
+        batch_size = feedback.outputs[0].data.shape[0]
+        outputs.append(feedback.outputs)
+        new_rng_key, rng_key = jax.random.split(rng_key)
+        cur_preds, _ = predict_fn(new_rng_key, feedback.features)
+        preds.append(cur_preds)
+        processed_samples += batch_size
+        
+        # BFS: feedback[0][0][1] is 's' (source), feedback[0][0][2] is 'A' (adjacency)
+        As.append(feedback[0][0][2].data)
+        source_nodes.append(np.argmax(feedback[0][0][1].data, axis=1))
+    
+    outputs = _concat(outputs, axis=0)
+    As = _concat(As, axis=0)
+    source_nodes = _concat(source_nodes, axis=0)
+    preds = _concat(preds, axis=0)
+    
+    # Standard CLRS evaluation
+    out = clrs.evaluate(outputs, preds)
+
+    # === CATEGORICAL SAMPLING ===
+    model_sample_categorical = bfs_sampling.sample_bfs_categorical([preds])
+    true_sample_categorical = bfs_sampling.sample_bfs_categorical(outputs)
+
+    model_categorical_truthmask = [
+        check_graphs.check_valid_bfsTree_new(As[i], model_sample_categorical[i], s=source_nodes[i]) 
+        for i in range(len(model_sample_categorical))
+    ]
+    correctness_model_categorical = sum(model_categorical_truthmask) / len(model_categorical_truthmask) 
+
+    true_categorical_truthmask = [
+        check_graphs.check_valid_bfsTree_new(As[i], true_sample_categorical[i], s=source_nodes[i]) 
+        for i in range(len(true_sample_categorical))
+    ]   
+    correctness_true_categorical = sum(true_categorical_truthmask) / len(true_categorical_truthmask)
+    
+    # === RANDOM SAMPLING ===
+    model_sample_random = dfs_sampling.sample_random_list([preds])
+    true_sample_random = dfs_sampling.sample_random_list(outputs)
+    
+    model_random_truthmask = [
+        check_graphs.check_valid_bfsTree_new(As[i], model_sample_random[i], s=source_nodes[i]) 
+        for i in range(len(model_sample_random))
+    ]
+    correctness_model_random = sum(model_random_truthmask) / len(model_random_truthmask)
+    
+    true_random_truthmask = [
+        check_graphs.check_valid_bfsTree_new(As[i], true_sample_random[i], s=source_nodes[i]) 
+        for i in range(len(true_sample_random))
+    ]
+    correctness_true_random = sum(true_random_truthmask) / len(true_random_truthmask)
+    
+    # === PRIM-LIKE SAMPLING (BFS-specific) ===
+    model_sample_prim = bfs_sampling.sample_bfs_prim([preds], source_nodes)
+    true_sample_prim = bfs_sampling.sample_bfs_prim(outputs, source_nodes)
+    
+    model_prim_truthmask = [
+        check_graphs.check_valid_bfsTree_new(As[i], model_sample_prim[i], s=source_nodes[i])
+        for i in range(len(model_sample_prim))
+    ]
+    correctness_model_prim = sum(model_prim_truthmask) / len(model_prim_truthmask)
+    
+    true_prim_truthmask = [
+        check_graphs.check_valid_bfsTree_new(As[i], true_sample_prim[i], s=source_nodes[i])
+        for i in range(len(true_sample_prim))
+    ]
+    correctness_true_prim = sum(true_prim_truthmask) / len(true_prim_truthmask)
+    
+    # === BEAM SEARCH SAMPLING (BFS-specific) ===
+    model_sample_beam = bfs_sampling.sample_bfs_beam([preds], source_nodes, beam_width=3)
+    true_sample_beam = bfs_sampling.sample_bfs_beam(outputs, source_nodes, beam_width=3)
+    
+    model_beam_truthmask = [
+        check_graphs.check_valid_bfsTree_new(As[i], model_sample_beam[i], s=source_nodes[i])
+        for i in range(len(model_sample_beam))
+    ]
+    correctness_model_beam = sum(model_beam_truthmask) / len(model_beam_truthmask)
+    
+    true_beam_truthmask = [
+        check_graphs.check_valid_bfsTree_new(As[i], true_sample_beam[i], s=source_nodes[i])
+        for i in range(len(true_sample_beam))
+    ]
+    correctness_true_beam = sum(true_beam_truthmask) / len(true_beam_truthmask)
+
+    
+    # === LOGGING ===
+    As_flat = [i.flatten() for i in As]
+    result_dict = {
+        "As": As_flat,
+        "Source_Nodes": source_nodes.tolist(),
+        #
+        "Categorical_Model_Trees": model_sample_categorical,
+        "Categorical_True_Trees": true_sample_categorical,
+        "Categorical_Model_Mask": model_categorical_truthmask,
+        "Categorical_True_Mask": true_categorical_truthmask,
+        "Categorical_Model_Accuracy": correctness_model_categorical,
+        "Categorical_True_Accuracy": correctness_true_categorical,
+        #
+        "Random_Model_Trees": model_sample_random,
+        "Random_True_Trees": true_sample_random,
+        "Random_Model_Mask": model_random_truthmask,
+        "Random_True_Mask": true_random_truthmask,
+        "Random_Model_Accuracy": correctness_model_random,
+        "Random_True_Accuracy": correctness_true_random,
+        #
+        "Prim_Model_Trees": model_sample_prim,
+        "Prim_True_Trees": true_sample_prim,
+        "Prim_Model_Mask": model_prim_truthmask,
+        "Prim_True_Mask": true_prim_truthmask,
+        "Prim_Model_Accuracy": correctness_model_prim,
+        "Prim_True_Accuracy": correctness_true_prim,
+        #
+        "Beam_Model_Trees": model_sample_beam,
+        "Beam_True_Trees": true_sample_beam,
+        "Beam_Model_Mask": model_beam_truthmask,
+        "Beam_True_Mask": true_beam_truthmask,
+        "Beam_Model_Accuracy": correctness_model_beam,
+        "Beam_True_Accuracy": correctness_true_beam,
+    }
+    result_df = pd.DataFrame.from_dict(result_dict)
+    result_df.to_csv(filename + '_bfs.csv', encoding='utf-8', index=False)
+    
+    if extras:
+        out.update(extras)
+    return {k: unpack(v) for k, v in out.items()}
 
 
 ###############################################################

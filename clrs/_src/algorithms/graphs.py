@@ -383,7 +383,7 @@ def bfs(A: _Array, s: int) -> _Out:
   return pi, probes
 
 def bfs_multi(A: _Array, s: int, seed: int, deterministic=False) -> _Out:
-  """Multiple solution breadth-first search (Moore, 1959)."""
+  """Multiple solution breadth-first search."""
   rng = np.random.RandomState(seed)
 
   chex.assert_rank(A, 2)
@@ -423,20 +423,18 @@ def bfs_multi(A: _Array, s: int, seed: int, deterministic=False) -> _Out:
               'pi_h': np.copy(pi)
           })
       
-      # Randomise order of source nodes (those discovered in previous step) and neighbour nodes
-      # If deterministic=True, keep fixed order
+      # Randomise order of sources (reached nodes) to generate different valid BFS trees
+      # All nodes in prev_reach are at the same distance from root, so any can be a valid parent
+      # Shuffling determines which one "claims" a child first when multiple are valid
       n = A.shape[0]
       sources = np.where(prev_reach == 1)[0]
       if deterministic:
         shuffled_sources = sources
-        neighbour_order = np.arange(n)
       else:
         shuffled_sources = np.copy(sources)
         rng.shuffle(shuffled_sources)
-        neighbour_order = np.arange(n)
-        rng.shuffle(neighbour_order)
       for src in shuffled_sources:
-        for j in neighbour_order:
+        for j in range(n):
           if A[src, j] > 0:
             if pi[j] == j and j != s:
               pi[j] = src

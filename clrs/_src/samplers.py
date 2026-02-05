@@ -455,6 +455,25 @@ class BfsSampler(Sampler):
     return [graph, source_node]
 
 
+class BfsMultiSampler(Sampler):
+  """BFS sampler that passes seed for multi-solution generation."""
+
+  def _sample_data(
+      self,
+      length: int,
+      p: Tuple[float, ...] = (0.5,),
+  ):
+    graph = self._random_er_graph(
+        nb_nodes=length, p=self._rng.choice(p),
+        directed=False, acyclic=False, weighted=False)
+    source_node = self._rng.choice(length)
+    
+    # Add deterministic seed for algorithm
+    sub_seed = self._rng.randint(0, 2**31)
+    
+    return [graph, source_node, sub_seed]  # Extra parameter for multi-solution
+
+
 class TopoSampler(Sampler):
   """Topological Sorting sampler."""
 
@@ -694,7 +713,7 @@ SAMPLERS = {
     'articulation_points': ArticulationSampler,
     'bridges': ArticulationSampler,
     'bfs': BfsSampler,
-    'bfs_multi': BfsSampler,
+    'bfs_multi': BfsMultiSampler,
     'mst_kruskal': MSTSampler,
     'mst_prim': BellmanFordSampler,
     'bellman_ford': BellmanFordSampler,

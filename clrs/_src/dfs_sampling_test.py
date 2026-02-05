@@ -2,7 +2,7 @@
 # figure out the difference between upwards and altupwards sampling
 # in correctness and runtime
 
-import dfs_sampling
+from clrs._src import dfs_sampling
 
 # ----------------------------------------------
 # test extract_probMatrix
