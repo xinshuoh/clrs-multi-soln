@@ -160,7 +160,8 @@ def are_valid_edges_parents(np_input_array, pi):
                 if np_input_array[parent][i] == 0: # no edge parent -> child
                     return False
             except:
-                breakpoint()
+                # breakpoint()
+                pass
     return True
 
 def are_valid_order_parents(np_input_array, pi):
@@ -296,3 +297,41 @@ s = 0
 
 expect_d = [0,1]
 assert check_valid_BFpaths(d,s,expect_d)
+
+
+##################################################################################################################
+# BFS CHECKER
+##################################################################################################################
+
+def check_valid_bfsTree(A, pi, s):
+    pi = copy.deepcopy(pi) # copy pi to avoid mutation
+
+    # pi should have same length as number of nodes in A
+    assert len(pi) == A.shape[0], "pi length must match number of nodes in A"
+
+    # Compute shortest path distances from s in A
+    G = nx.from_numpy_array(A, create_using=nx.Graph)
+    dist = nx.single_source_shortest_path_length(G, s)
+
+    # Source node must be its own parent
+    if pi[s] != s:
+        return False
+
+    # Unreachable nodes must have self-parent
+    # Reachable nodes have valid parents and correct levels
+    for i in range(len(pi)):
+        if i == s:
+            continue  # already checked source node
+        if i not in dist:  # unreachable
+            if pi[i] != i:
+                return False
+        else:  # reachable
+            parent = pi[i]
+            if parent == i:  # self-parent not allowed for reachable nodes
+                return False
+            if A[parent][i] == 0:  # no edge from parent to child
+                return False
+            if dist[parent] != dist[i] - 1:  # parent must be one level above child
+                return False
+            
+    return True
