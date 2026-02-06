@@ -261,13 +261,13 @@ def BFS_multi_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extra
     true_sample_categorical = bfs_sampling.sample_bfs_categorical(outputs)
 
     model_categorical_truthmask = [
-        check_graphs.check_valid_bfsTree_new(As[i], model_sample_categorical[i], s=source_nodes[i]) 
+        check_graphs.check_valid_bfsTree(As[i], model_sample_categorical[i], s=source_nodes[i]) 
         for i in range(len(model_sample_categorical))
     ]
     correctness_model_categorical = sum(model_categorical_truthmask) / len(model_categorical_truthmask) 
 
     true_categorical_truthmask = [
-        check_graphs.check_valid_bfsTree_new(As[i], true_sample_categorical[i], s=source_nodes[i]) 
+        check_graphs.check_valid_bfsTree(As[i], true_sample_categorical[i], s=source_nodes[i]) 
         for i in range(len(true_sample_categorical))
     ]   
     correctness_true_categorical = sum(true_categorical_truthmask) / len(true_categorical_truthmask)
@@ -277,13 +277,13 @@ def BFS_multi_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extra
     true_sample_random = dfs_sampling.sample_random_list(outputs)
     
     model_random_truthmask = [
-        check_graphs.check_valid_bfsTree_new(As[i], model_sample_random[i], s=source_nodes[i]) 
+        check_graphs.check_valid_bfsTree(As[i], model_sample_random[i], s=source_nodes[i]) 
         for i in range(len(model_sample_random))
     ]
     correctness_model_random = sum(model_random_truthmask) / len(model_random_truthmask)
     
     true_random_truthmask = [
-        check_graphs.check_valid_bfsTree_new(As[i], true_sample_random[i], s=source_nodes[i]) 
+        check_graphs.check_valid_bfsTree(As[i], true_sample_random[i], s=source_nodes[i]) 
         for i in range(len(true_sample_random))
     ]
     correctness_true_random = sum(true_random_truthmask) / len(true_random_truthmask)
@@ -293,13 +293,13 @@ def BFS_multi_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extra
     true_sample_prim = bfs_sampling.sample_bfs_prim(outputs, source_nodes)
     
     model_prim_truthmask = [
-        check_graphs.check_valid_bfsTree_new(As[i], model_sample_prim[i], s=source_nodes[i])
+        check_graphs.check_valid_bfsTree(As[i], model_sample_prim[i], s=source_nodes[i])
         for i in range(len(model_sample_prim))
     ]
     correctness_model_prim = sum(model_prim_truthmask) / len(model_prim_truthmask)
     
     true_prim_truthmask = [
-        check_graphs.check_valid_bfsTree_new(As[i], true_sample_prim[i], s=source_nodes[i])
+        check_graphs.check_valid_bfsTree(As[i], true_sample_prim[i], s=source_nodes[i])
         for i in range(len(true_sample_prim))
     ]
     correctness_true_prim = sum(true_prim_truthmask) / len(true_prim_truthmask)
@@ -309,13 +309,13 @@ def BFS_multi_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extra
     true_sample_beam = bfs_sampling.sample_bfs_beam(outputs, source_nodes, beam_width=3)
     
     model_beam_truthmask = [
-        check_graphs.check_valid_bfsTree_new(As[i], model_sample_beam[i], s=source_nodes[i])
+        check_graphs.check_valid_bfsTree(As[i], model_sample_beam[i], s=source_nodes[i])
         for i in range(len(model_sample_beam))
     ]
     correctness_model_beam = sum(model_beam_truthmask) / len(model_beam_truthmask)
     
     true_beam_truthmask = [
-        check_graphs.check_valid_bfsTree_new(As[i], true_sample_beam[i], s=source_nodes[i])
+        check_graphs.check_valid_bfsTree(As[i], true_sample_beam[i], s=source_nodes[i])
         for i in range(len(true_sample_beam))
     ]
     correctness_true_beam = sum(true_beam_truthmask) / len(true_beam_truthmask)
