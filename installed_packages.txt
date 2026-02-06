@@ -8,8 +8,11 @@ chex==0.1.91
 contourpy==1.3.3
 cycler==0.12.1
 dill==0.4.0
--e git+https://github.com/xinshuoh/clrs-multi-soln.git@91e9baaa7defaac0a1987c61b266716600d3616a#egg=dm_clrs
+dm-clrs @ git+https://github.com/deepmind/clrs.git@9ca575c78441ee8a4283a13cd3be660bb967050c
 dm-haiku==0.0.15
+dm-tree==0.1.9
+docstring_parser==0.17.0
+einops==0.8.1
 etils==1.13.0
 filelock==3.20.0
 flatbuffers==25.9.23
@@ -23,7 +26,9 @@ grpcio==1.76.0
 h5py==3.15.1
 humanize==4.14.0
 idna==3.11
+immutabledict==4.2.2
 importlib_resources==6.5.2
+iniconfig==2.3.0
 jax==0.8.0
 jaxlib==0.8.0
 Jinja2==3.1.6
@@ -37,6 +42,7 @@ markdown-it-py==4.0.0
 MarkupSafe==3.0.3
 matplotlib==3.10.7
 mdurl==0.1.2
+ml_collections==1.1.0
 ml_dtypes==0.5.3
 mpmath==1.3.0
 msgpack==1.1.2
@@ -51,11 +57,14 @@ orbax-checkpoint==0.11.28
 packaging==25.0
 pandas==2.3.3
 pillow==12.0.0
+pluggy==1.6.0
 promise==2.3
-protobuf==3.20.1
+protobuf==6.33.0
 psutil==7.1.3
+pyarrow==22.0.0
 Pygments==2.19.2
 pyparsing==3.2.5
+pytest==9.0.0
 python-dateutil==2.9.0.post0
 pytz==2025.2
 PyYAML==6.0.3
@@ -64,6 +73,7 @@ rich==14.2.0
 scikit-learn==1.7.2
 sciplotlib==0.0.7
 scipy==1.16.3
+simple-parsing==0.1.7
 simplejson==3.20.2
 six==1.17.0
 sympy==1.14.0
@@ -74,7 +84,7 @@ tensorflow==2.20.0
 tensorflow-metadata==1.17.2
 tensorstore==0.1.78
 termcolor==3.2.0
-tfds-nightly==4.5.2.dev202204190046
+tfds-nightly==4.9.9.dev202510250044
 threadpoolctl==3.6.0
 toml==0.10.2
 toolz==1.1.0
