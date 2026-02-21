@@ -356,6 +356,7 @@ def BFS_multi_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extra
         "Beam_True_Accuracy": correctness_true_beam,
     }
     result_df = pd.DataFrame.from_dict(result_dict)
+    print(f"Saving BFS multi-solution results to {filename}_bfs.csv")
     result_df.to_csv(filename + '_bfs.csv', encoding='utf-8', index=False)
     
     if extras:
