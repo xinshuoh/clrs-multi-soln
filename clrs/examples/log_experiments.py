@@ -1,5 +1,7 @@
 import copy
+import os
 import time
+from datetime import datetime
 
 import numpy as np
 import clrs     # for clrs.evaluate
@@ -19,6 +21,18 @@ from clrs._src.validate_distributions import (validate_distributions, postproces
                                               plot_n_unique_by_n_extracted,plot_n_unique_by_n_extracted_dfs,
                                               make_n_unique_by_n_extracted_df,
                                               line_plot, line_plot_dfs)
+
+###############################################################
+# Helpers
+###############################################################
+def save_results(result_dict, filename):
+    """Save result_dict as a timestamped CSV in the results/ directory."""
+    os.makedirs('results', exist_ok=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    save_path = os.path.join('results', f'{filename}_{timestamp}.csv')
+    pd.DataFrame.from_dict(result_dict).to_csv(save_path, encoding='utf-8', index=False)
+    print(f'Saved results to {save_path}')
+
 
 ###############################################################
 # Methods needed, copy-pasted from run.py :(
@@ -214,8 +228,7 @@ def BF_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, file
                    "Greedy_True_Valids": true_greedy_valids
                    #
                    }
-    result_df = pd.DataFrame.from_dict(result_dict)
-    result_df.to_csv(filename + '.csv', encoding='utf-8', index=False)
+    save_results(result_dict, f"{filename}_BF")
 
     if extras:
         out.update(extras)
@@ -355,9 +368,7 @@ def BFS_multi_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extra
         "Beam_Model_Accuracy": correctness_model_beam,
         "Beam_True_Accuracy": correctness_true_beam,
     }
-    result_df = pd.DataFrame.from_dict(result_dict)
-    print(f"Saving BFS multi-solution results to {filename}_bfs.csv")
-    result_df.to_csv(filename + '_bfs.csv', encoding='utf-8', index=False)
+    save_results(result_dict, f"{filename}_BFS")
     
     if extras:
         out.update(extras)
@@ -534,8 +545,7 @@ def DFS_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, fil
                  "altUpwards_True_Valids": true_altupwards_valids,
                  }
     #breakpoint()
-    result_df = pd.DataFrame.from_dict(result_dict)
-    result_df.to_csv(filename + '.csv', encoding='utf-8', index=False)
+    save_results(result_dict, f"{filename}_DFS")
 
     # As[0].reshape((np.sqrt(len(lAs[0])).astype(int)), np.sqrt(len(lAs[0])).astype(int))
 
