@@ -16,15 +16,14 @@
 
 from typing import Dict, List, Tuple
 import chex
-import numpy as np
 
+from clrs._src.multi_sol.training import objectives as multisol_objectives
 from clrs._src import probing
 from clrs._src import specs
 
 import haiku as hk
 import jax
 import jax.numpy as jnp
-import torch # try to use torch kl implementation
 
 _Array = chex.Array
 _DataPoint = probing.DataPoint
@@ -78,10 +77,9 @@ def output_loss_chunked(truth: _DataPoint, pred: _Array,
     loss = -jnp.sum(truth.data * pred, axis=-1)
 
   elif truth.type_ == _Type.MULT_SOL:
-    #TODO test!
-    # Predictions are NxN probabilities.
-    # Compute the KL divergence between predictions and 'true' distribution
-    loss = -jnp.sum(jnp.multiply(truth.data, jnp.log(jnp.divide(pred,truth.data))), axis=-1)[0]
+    # Predictions are NxN logits. Compute row-wise KL(truth || pred_probs).
+    loss = multisol_objectives.kl_divergence_truth_pred_elementwise(
+        truth.data, pred)
 
   if mask is not None:
     mask = mask * _expand_and_broadcast_to(is_last, loss)
@@ -122,29 +120,7 @@ def output_loss(truth: _DataPoint, pred: _Array, nb_nodes: int) -> float:
     total_loss = jnp.mean(-jnp.sum(truth.data * pred, axis=-1))
 
   elif truth.type_ == _Type.MULT_SOL:
-    #TODO test! if crashes, jax.nn.log_softmax()
-    # Predictions are NxN probabilities.
-    # Compute the KL divergence between predictions and 'true' distribution
-    #print('loss begin')
-    # filter predictions >1 to 1
-    #pred = jnp.minimum(pred, 1)
-    # filter predictions <0 to 0
-    #pred = jnp.maximum(pred, 0)
-    #pred = jax.nn.softmax(pred)
-    epsilon = 1e-8 # Add a small epsilon to avoid taking the logarithm of zero
-    #jax.debug.print('losses.py, truth.data: \n {}', truth.data)
-    #jax.debug.print('losses.py, pred: \n {}', pred)
-    pred = jax.nn.softmax(pred)
-    unreduced_loss = jax.scipy.special.kl_div(truth.data, pred+epsilon)
-    total_loss = jnp.mean(unreduced_loss)
-    #total_loss = total_loss + 0.01regularisationloss #kl divergence to uniform dist.
-    #total_loss = -jnp.sum(jnp.sum(truth.data * jnp.log((jnp.exp(pred)+epsilon)/(truth.data+epsilon)), axis=-1))
-    #pred = np.asarray(pred)
-    #pred = torch.from_numpy(pred).cuda()
-    # total_loss = torch.nn.KLDivLoss(reduction="batchmean")(pred, truth.data) # can't use this since jax
-    #jax.debug.print('losses.py, total_loss: {}', total_loss)
-    #jax.debug.breakpoint()
-    #print('loss end')
+    total_loss = multisol_objectives.kl_divergence_truth_pred(truth.data, pred)
 
   return total_loss  # pytype: disable=bad-return-type  # jnp-type
 
@@ -231,11 +207,9 @@ def _hint_loss(
     # Compute the cross entropy between doubly stochastic pred and truth_data
     loss = -jnp.sum(truth_data * pred, axis=-1)
 
-  elif truth_type_ == _Type.MULT_SOL:
-    raise('unimplemented')#TODO test!
-    # Predictions are NxN probabilities.
-    # Compute the KL divergence between predictions and 'true' distribution
-    loss = -jnp.sum(truth_data * jnp.log(pred/truth_data), axis=-1)
+  elif truth_type == _Type.MULT_SOL:
+    loss = multisol_objectives.kl_divergence_truth_pred_elementwise(
+        truth_data, pred)
 
   if mask is None:
     mask = jnp.ones_like(loss)

@@ -18,6 +18,7 @@ import functools
 from typing import Dict, Optional
 
 import chex
+from clrs._src.multi_sol.training import output_head as multisol_output_head
 from clrs._src import probing
 from clrs._src import specs
 import haiku as hk
@@ -194,9 +195,7 @@ def postprocess(spec: _Spec, preds: Dict[str, _Array],
       if hard:
         data = jax.nn.one_hot(jnp.argmax(data, axis=-1), data.shape[-1])
     elif t == _Type.MULT_SOL:
-      #pass
-      data = jax.nn.softmax(data) # verify shape=[batch,nodes,nodes]
-      # values should be logits?
+      data = multisol_output_head.multisol_softmax(data, axis=-1)
     else:
       raise ValueError("Invalid type")
     result[name] = probing.DataPoint(

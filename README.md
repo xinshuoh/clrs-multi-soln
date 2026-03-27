@@ -25,6 +25,7 @@ Please run from inside this repo's outermost directory.
 ## Files that matter
 - `clrs/examples/run.py` lets you train the models and generate results `.csv`s, when run with correct flags
 - `clrs/examples/log_experiments.py` gets called by `run.py` and produces the `.csv` files
+- `clrs/_src/multi_sol/` contains the modular multi-solution framework (core/data/training/sampling/validation/evaluation), with BFS plugin wiring used by `log_experiments.py`
 - `results/viz.ipynb` lets you recreate the figures from `.csv` files
 - `clrs/_src/validate_distributions.py` does appendix stuff
 

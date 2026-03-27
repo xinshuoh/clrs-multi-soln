@@ -1,121 +1,165 @@
-import numpy as np
+import importlib.util
+import pathlib
+import sys
+import types
 import unittest
-from clrs._src import bfs_sampling
+
+import numpy as np
+
+
+_MISSING = object()
+
+
+def _find_repo_root() -> pathlib.Path:
+  cur = pathlib.Path(__file__).resolve()
+  for parent in [cur] + list(cur.parents):
+    if (parent / "setup.py").exists():
+      return parent
+  raise RuntimeError("Could not locate repository root from test path.")
+
+
+def _load_module(name: str, path: pathlib.Path):
+  spec = importlib.util.spec_from_file_location(name, str(path))
+  module = importlib.util.module_from_spec(spec)
+  sys.modules[name] = module
+  assert spec.loader is not None
+  spec.loader.exec_module(module)
+  return module
+
 
 class DummyDatapoint:
-    def __init__(self, data):
-        self.data = data
+  def __init__(self, data):
+    self.data = data
+
 
 class BFSSamplingTest(unittest.TestCase):
-    def test_prim_like_sampler_simple_path(self):
-        # Graph: 0 -> 1 -> 2
-        # Matrix index: [row][col] = prob that col is parent of row
-        # 0 is root.
-        # 1's parent should be 0.
-        # 2's parent should be 1.
-        
-        #       0    1    2
-        # 0 [1.0, 0.0, 0.0] (0 points to 0)
-        # 1 [1.0, 0.0, 0.0] (1 points to 0)
-        # 2 [0.0, 1.0, 0.0] (2 points to 1)
-        
-        probMatrix = np.array([
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0]
-        ])
-        
-        # Wrap in dummy structure for extraction
-        # The extraction expects a list of datapoints, where each datapoint.data is a list of probMatrices
-        outsOrPreds = [DummyDatapoint([probMatrix])]
-        s_indices = [0]
-        
-        trees = bfs_sampling.sample_bfs_prim(outsOrPreds, s_indices)
-        
-        # Expected tree: pi[0]=0, pi[1]=0, pi[2]=1
-        expected_pi = np.array([0, 0, 1])
-        
-        np.testing.assert_array_equal(trees[0], expected_pi)
 
-    def test_prim_like_sampler_branching(self):
-        # Graph: 0 -> 1, 0 -> 2
-        # 1 parent 0
-        # 2 parent 0
-        
-        probMatrix = np.array([
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0]
-        ])
-        
-        outsOrPreds = [DummyDatapoint([probMatrix])]
-        s_indices = [0]
-        
-        trees = bfs_sampling.sample_bfs_prim(outsOrPreds, s_indices)
-        expected_pi = np.array([0, 0, 0])
-        np.testing.assert_array_equal(trees[0], expected_pi)
-        
-    def test_prim_like_sampler_disconnected(self):
-        # Graph: 0 (root), 1 (disconnected/self), 2 (disconnected/self)
-        # Although probMatrix might imply something, if there's NO probability from processed set...
-        
-        # Let's say 0 is root.
-        # 1 has only probability to 2 (unreachable from 0 initially)
-        # 2 has only probability to 1
-        
-        # This is a disconnected graph case. The sampler should handle it gracefully.
-        
-        probMatrix = np.array([
-            [1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0], # 1 points to 2
-            [0.0, 1.0, 0.0]  # 2 points to 1
-        ])
-        
-        outsOrPreds = [DummyDatapoint([probMatrix])]
-        s_indices = [0]
-        
-        # This might be non-deterministic if we don't seed, but logic says:
-        # processed = {0}
-        # remaining = {1, 2}
-        # score(1) from processed(0) = 0
-        # score(2) from processed(0) = 0
-        # It picks one. Say 1. Parent(1) from processed? None valid. 
-        # Implementation: defaults to self if no valid parent.
-        # So pi[1] -> 1. processed={0,1}.
-        # remaining={2}.
-        # score(2) from processed{0,1} -> prob(2->0)=0 + prob(2->1)=1 = 1.
-        # So 2 connects to 1.
-        # Result: 0->0, 1->1, 2->1.
-        
-        # Or if 2 picked first: 2->2, 1->2.
-        
-        # Let's see if it crashes.
-        trees = bfs_sampling.sample_bfs_prim(outsOrPreds, s_indices)
-        self.assertEqual(len(trees), 1)
-        self.assertEqual(len(trees[0]), 3)
-        self.assertEqual(trees[0][0], 0) # Root always itself
+  def setUp(self):
+    self._saved_modules = {}
+    self._repo_root = _find_repo_root()
+    self.addCleanup(self._restore_modules)
 
-    def test_beam_search(self):
-        # Graph: 0->1, 0->2. 
-        # Probabilities favor 0->1 over 0->2 slightly for 1.
-        
-        probMatrix = np.array([
-            [1.0, 0.0, 0.0],
-            [0.6, 0.4, 0.0], # 1 prefers 0(0.6) over 1(0.4/self??) -- wait, probMatrix is P(parent(i)=j)
-                             # Let's say P(parent(1)=0)=0.9, P(parent(1)=2)=0.1
-            [0.9, 0.0, 0.1]  # P(parent(2)=0)=0.9
-        ])
-        
-        outsOrPreds = [DummyDatapoint([probMatrix])]
-        s_indices = [0]
-        
-        # Greedy might just pick max at each step. 
-        # Beam search with width 1 should match greedy roughly (if no lookahead issue).
-        
-        trees = bfs_sampling.sample_bfs_beam(outsOrPreds, s_indices, beam_width=2)
-        # Should pick 0->1, 0->2.
-        expected_pi = np.array([0, 0, 0])
-        np.testing.assert_array_equal(trees[0], expected_pi)
+  def _restore_modules(self):
+    for name, old_value in self._saved_modules.items():
+      if old_value is _MISSING:
+        sys.modules.pop(name, None)
+      else:
+        sys.modules[name] = old_value
 
-if __name__ == '__main__':
-    unittest.main()
+  def _install_module(self, name, module):
+    if name not in self._saved_modules:
+      self._saved_modules[name] = sys.modules.get(name, _MISSING)
+    sys.modules[name] = module
+
+  def _install_package(self, name):
+    module = types.ModuleType(name)
+    module.__path__ = []
+    self._install_module(name, module)
+    return module
+
+  def _load_wrapper(self):
+    self._install_package("clrs")
+    self._install_package("clrs._src")
+    self._install_package("clrs._src.multi_sol")
+    self._install_package("clrs._src.multi_sol.sampling")
+
+    base_module = types.ModuleType("clrs._src.multi_sol.sampling.base")
+
+    def extract_prob_matrices(outs_or_preds):
+      out = []
+      for item in outs_or_preds:
+        distlist = item["pi"].data if isinstance(item, dict) else item.data
+        out.extend([np.asarray(x) for x in distlist])
+      return out
+
+    def normalize_rows(prob_matrix):
+      normalized = prob_matrix.astype(np.float64, copy=True)
+      row_sums = normalized.sum(axis=1)
+      nonzero = row_sums > 0
+      normalized[nonzero] = normalized[nonzero] / row_sums[nonzero][:, None]
+      return normalized
+
+    base_module.extract_prob_matrices = extract_prob_matrices
+    base_module.normalize_rows = normalize_rows
+    self._install_module("clrs._src.multi_sol.sampling.base", base_module)
+
+    bfs_module = _load_module(
+        "clrs._src.multi_sol.sampling.bfs",
+        self._repo_root / "clrs" / "_src" / "multi_sol" / "sampling" / "bfs.py",
+    )
+    self._install_module("clrs._src.multi_sol.sampling.bfs", bfs_module)
+
+    wrapper_module = _load_module(
+        "clrs._src.bfs_sampling",
+        self._repo_root / "clrs" / "_src" / "bfs_sampling.py",
+    )
+    return wrapper_module, bfs_module
+
+  def test_wrapper_exports_modular_bfs_api(self):
+    bfs_sampling, modular_bfs = self._load_wrapper()
+    expected_api = (
+        "sample_bfs_prim",
+        "prim_like_sampler",
+        "sample_bfs_categorical",
+        "sample_bfs_beam",
+        "bfs_beam_sampler",
+    )
+    self.assertEqual(bfs_sampling.__all__, expected_api)
+    for name in expected_api:
+      self.assertIs(getattr(bfs_sampling, name), getattr(modular_bfs, name))
+
+  def test_prim_like_sampler_simple_path(self):
+    bfs_sampling, _ = self._load_wrapper()
+    prob_matrix = np.array([
+        [1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+    ])
+    trees = bfs_sampling.sample_bfs_prim([DummyDatapoint([prob_matrix])], [0])
+    np.testing.assert_array_equal(trees[0], np.array([0, 0, 1]))
+
+  def test_prim_like_sampler_branching(self):
+    bfs_sampling, _ = self._load_wrapper()
+    prob_matrix = np.array([
+        [1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+    ])
+    trees = bfs_sampling.sample_bfs_prim([DummyDatapoint([prob_matrix])], [0])
+    np.testing.assert_array_equal(trees[0], np.array([0, 0, 0]))
+
+  def test_prim_like_sampler_disconnected_invariants(self):
+    bfs_sampling, _ = self._load_wrapper()
+    prob_matrix = np.array([
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0],
+    ])
+    trees = bfs_sampling.sample_bfs_prim([DummyDatapoint([prob_matrix])], [0])
+    self.assertEqual(trees[0][0], 0)
+    self.assertTrue(np.all((trees[0] >= 0) & (trees[0] < 3)))
+
+  def test_categorical_sampling_is_deterministic_for_one_hot_rows(self):
+    bfs_sampling, _ = self._load_wrapper()
+    prob_matrix = np.array([
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ])
+    trees = bfs_sampling.sample_bfs_categorical([DummyDatapoint([prob_matrix])])
+    np.testing.assert_array_equal(trees[0], np.array([0, 1, 2]))
+
+  def test_beam_search_prefers_high_mass_parents(self):
+    bfs_sampling, _ = self._load_wrapper()
+    prob_matrix = np.array([
+        [1.0, 0.0, 0.0],
+        [0.95, 0.05, 0.0],
+        [0.80, 0.20, 0.0],
+    ])
+    trees = bfs_sampling.sample_bfs_beam(
+        [DummyDatapoint([prob_matrix])], [0], beam_width=2)
+    np.testing.assert_array_equal(trees[0], np.array([0, 0, 0]))
+
+
+if __name__ == "__main__":
+  unittest.main()

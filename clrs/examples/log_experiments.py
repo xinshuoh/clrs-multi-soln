@@ -1,4 +1,3 @@
-import copy
 import os
 import time
 from datetime import datetime
@@ -9,18 +8,26 @@ import jax
 import pandas as pd
 
 import clrs._src.dfs_sampling as dfs_sampling
-import clrs._src.bfs_sampling as bfs_sampling
+from clrs._src.multi_sol.algorithms.bfs.plugin import evaluate_bfs_multisol_batch
 from clrs._src import dfs_uniqueness_check
 from clrs._src.algorithms import check_graphs, dfs_verification_tester
 from clrs._src.algorithms.BF_beamsearch import sample_beamsearch, sample_greedysearch
 from clrs._src.bf_uniqueness_check import check_uniqueness_bf
+from clrs._src.multi_sol.data.distribution_generation import (
+    build_bf_validation_payload,
+    build_dfs_validation_payload,
+    generate_validation_dataframes,
+)
 #from clrs.examples.run import _concat, unpack  # circular import error!
 
-from clrs._src.validate_distributions import (validate_distributions, postprocess_edge_reuse_matrix_list,
-                                              make_edge_reuse_matrix_list, plot_edge_reuse_matrix_list_mean, plot_edge_reuse_matrix_list_mean_dfs,
-                                              plot_n_unique_by_n_extracted,plot_n_unique_by_n_extracted_dfs,
-                                              make_n_unique_by_n_extracted_df,
-                                              line_plot, line_plot_dfs)
+from clrs._src.validate_distributions import (
+    line_plot,
+    line_plot_dfs,
+    plot_edge_reuse_matrix_list_mean,
+    plot_edge_reuse_matrix_list_mean_dfs,
+    plot_n_unique_by_n_extracted,
+    plot_n_unique_by_n_extracted_dfs,
+)
 
 ###############################################################
 # Helpers
@@ -80,23 +87,23 @@ def BF_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, file
     if vd_flag:
         print('log_exp.py, vd_flag working')
         print('log_exp.py, BF_collect_and_eval, only testing on 10 of the graphs')
-        #truncate to just 10 graph
-        As_vd = As[:10]
-        source_nodes_vd = source_nodes[:10]
-        outputs_vd = copy.deepcopy(outputs)
-        preds_vd = copy.deepcopy(preds)
-        outputs_vd[0].data = outputs_vd[0].data[:10]
-        preds_vd['pi'].data = preds_vd['pi'].data[:10]
-        #truncate
-        dataframes,_,_ = validate_distributions(As=As_vd, Ss=source_nodes_vd, outsOrPreds=[preds_vd], numSolsExtracting=NSE, flag='BF')    # note wrapping preds in list for extract_probmatrices to work
+        payload = build_bf_validation_payload(
+            adjacency=As,
+            source_nodes=source_nodes,
+            outputs=outputs,
+            preds=preds,
+        )
+        dataframes, df = generate_validation_dataframes(
+            payload=payload,
+            nse=NSE,
+            mode='BF',
+        )
         plot_n_unique_by_n_extracted(dataframes, len(As[0]))
-        df, _, _ = validate_distributions(As=As_vd, Ss=source_nodes_vd, outsOrPreds=[preds_vd], numSolsExtracting=NSE,
-                                            flag="dummy", edge_reuse_BF=True)
 
         #plot_edge_reuse_matrix_list_median(df, len(As[0]))
         #breakpoint()
-        plot_edge_reuse_matrix_list_mean(df, len(As_vd[0]))
-        line_plot(df, len(As_vd[0]))
+        plot_edge_reuse_matrix_list_mean(df, payload.graph_size)
+        line_plot(df, payload.graph_size)
         #breakpoint()
 
     ########
@@ -241,138 +248,17 @@ def BF_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, file
 
 def BFS_multi_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, 
                                 filename='bfs_accuracy', vd_flag=False, NSE=100):
-    """Collect batches of output and hint preds and evaluate BFS multi-solution."""
-    processed_samples = 0
-    preds = []
-    outputs = []
-    As = []
-    source_nodes = []
-    
-    while processed_samples < sample_count:
-        feedback = next(sampler)
-        batch_size = feedback.outputs[0].data.shape[0]
-        outputs.append(feedback.outputs)
-        new_rng_key, rng_key = jax.random.split(rng_key)
-        cur_preds, _ = predict_fn(new_rng_key, feedback.features)
-        preds.append(cur_preds)
-        processed_samples += batch_size
-        
-        # BFS: feedback[0][0][1] is 's' (source), feedback[0][0][2] is 'A' (adjacency)
-        As.append(feedback[0][0][2].data)
-        source_nodes.append(np.argmax(feedback[0][0][1].data, axis=1))
-    
-    outputs = _concat(outputs, axis=0)
-    As = _concat(As, axis=0)
-    source_nodes = _concat(source_nodes, axis=0)
-    preds = _concat(preds, axis=0)
-    
-    # Standard CLRS evaluation
-    out = clrs.evaluate(outputs, preds)
-
-    # === CATEGORICAL SAMPLING ===
-    model_sample_categorical = bfs_sampling.sample_bfs_categorical([preds])
-    true_sample_categorical = bfs_sampling.sample_bfs_categorical(outputs)
-
-    model_categorical_truthmask = [
-        check_graphs.check_valid_bfsTree(As[i], model_sample_categorical[i], s=source_nodes[i]) 
-        for i in range(len(model_sample_categorical))
-    ]
-    correctness_model_categorical = sum(model_categorical_truthmask) / len(model_categorical_truthmask) 
-
-    true_categorical_truthmask = [
-        check_graphs.check_valid_bfsTree(As[i], true_sample_categorical[i], s=source_nodes[i]) 
-        for i in range(len(true_sample_categorical))
-    ]   
-    correctness_true_categorical = sum(true_categorical_truthmask) / len(true_categorical_truthmask)
-    
-    # === RANDOM SAMPLING ===
-    model_sample_random = dfs_sampling.sample_random_list([preds])
-    true_sample_random = dfs_sampling.sample_random_list(outputs)
-    
-    model_random_truthmask = [
-        check_graphs.check_valid_bfsTree(As[i], model_sample_random[i], s=source_nodes[i]) 
-        for i in range(len(model_sample_random))
-    ]
-    correctness_model_random = sum(model_random_truthmask) / len(model_random_truthmask)
-    
-    true_random_truthmask = [
-        check_graphs.check_valid_bfsTree(As[i], true_sample_random[i], s=source_nodes[i]) 
-        for i in range(len(true_sample_random))
-    ]
-    correctness_true_random = sum(true_random_truthmask) / len(true_random_truthmask)
-    
-    # === PRIM-LIKE SAMPLING (BFS-specific) ===
-    model_sample_prim = bfs_sampling.sample_bfs_prim([preds], source_nodes)
-    true_sample_prim = bfs_sampling.sample_bfs_prim(outputs, source_nodes)
-    
-    model_prim_truthmask = [
-        check_graphs.check_valid_bfsTree(As[i], model_sample_prim[i], s=source_nodes[i])
-        for i in range(len(model_sample_prim))
-    ]
-    correctness_model_prim = sum(model_prim_truthmask) / len(model_prim_truthmask)
-    
-    true_prim_truthmask = [
-        check_graphs.check_valid_bfsTree(As[i], true_sample_prim[i], s=source_nodes[i])
-        for i in range(len(true_sample_prim))
-    ]
-    correctness_true_prim = sum(true_prim_truthmask) / len(true_prim_truthmask)
-    
-    # === BEAM SEARCH SAMPLING (BFS-specific) ===
-    model_sample_beam = bfs_sampling.sample_bfs_beam([preds], source_nodes, beam_width=3)
-    true_sample_beam = bfs_sampling.sample_bfs_beam(outputs, source_nodes, beam_width=3)
-    
-    model_beam_truthmask = [
-        check_graphs.check_valid_bfsTree(As[i], model_sample_beam[i], s=source_nodes[i])
-        for i in range(len(model_sample_beam))
-    ]
-    correctness_model_beam = sum(model_beam_truthmask) / len(model_beam_truthmask)
-    
-    true_beam_truthmask = [
-        check_graphs.check_valid_bfsTree(As[i], true_sample_beam[i], s=source_nodes[i])
-        for i in range(len(true_sample_beam))
-    ]
-    correctness_true_beam = sum(true_beam_truthmask) / len(true_beam_truthmask)
-
-    
-    # === LOGGING ===
-    As_flat = [i.flatten() for i in As]
-    result_dict = {
-        "As": As_flat,
-        "Source_Nodes": source_nodes.tolist(),
-        #
-        "Categorical_Model_Trees": model_sample_categorical,
-        "Categorical_True_Trees": true_sample_categorical,
-        "Categorical_Model_Mask": model_categorical_truthmask,
-        "Categorical_True_Mask": true_categorical_truthmask,
-        "Categorical_Model_Accuracy": correctness_model_categorical,
-        "Categorical_True_Accuracy": correctness_true_categorical,
-        #
-        "Random_Model_Trees": model_sample_random,
-        "Random_True_Trees": true_sample_random,
-        "Random_Model_Mask": model_random_truthmask,
-        "Random_True_Mask": true_random_truthmask,
-        "Random_Model_Accuracy": correctness_model_random,
-        "Random_True_Accuracy": correctness_true_random,
-        #
-        "Prim_Model_Trees": model_sample_prim,
-        "Prim_True_Trees": true_sample_prim,
-        "Prim_Model_Mask": model_prim_truthmask,
-        "Prim_True_Mask": true_prim_truthmask,
-        "Prim_Model_Accuracy": correctness_model_prim,
-        "Prim_True_Accuracy": correctness_true_prim,
-        #
-        "Beam_Model_Trees": model_sample_beam,
-        "Beam_True_Trees": true_sample_beam,
-        "Beam_Model_Mask": model_beam_truthmask,
-        "Beam_True_Mask": true_beam_truthmask,
-        "Beam_Model_Accuracy": correctness_model_beam,
-        "Beam_True_Accuracy": correctness_true_beam,
-    }
-    save_results(result_dict, f"{filename}_BFS")
-    
-    if extras:
-        out.update(extras)
-    return {k: unpack(v) for k, v in out.items()}
+    """Collect batches of output and evaluate BFS multi-solution."""
+    del vd_flag, NSE  # kept for CLI compatibility
+    return evaluate_bfs_multisol_batch(
+        sampler=sampler,
+        predict_fn=predict_fn,
+        sample_count=sample_count,
+        rng_key=rng_key,
+        extras=extras,
+        save_results_fn=save_results,
+        filename=filename,
+    )
 
 
 ###############################################################
@@ -401,21 +287,23 @@ def DFS_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, fil
     if vd_flag:
         print('log_exp.py, vd_flag working')
         print('truncating DFS_collect_and_eval to 10 graphs')
-        As_vd = As[:10]
-        outputs_vd = copy.deepcopy(outputs)
-        preds_vd = copy.deepcopy(preds)
-        outputs_vd[0].data = outputs_vd[0].data[:10]
-        preds_vd[0]['pi'].data = preds_vd[0]['pi'].data[:10]
-        dataframes, _, _ = validate_distributions(As=As_vd, Ss=[0]*len(As_vd), outsOrPreds=preds_vd,
-                                            numSolsExtracting=NSE, flag='DFS')  # note not wrapping preds in list for extract_probmatrices to work
+        payload = build_dfs_validation_payload(
+            adjacency=As,
+            outputs=outputs,
+            preds=preds,
+        )
+        dataframes, df = generate_validation_dataframes(
+            payload=payload,
+            nse=NSE,
+            mode='DFS',
+        )
         #breakpoint()
         plot_n_unique_by_n_extracted_dfs(dataframes, len(As[0]))
-        df, _, _ = validate_distributions(As=As_vd, Ss=[0]*len(As_vd), outsOrPreds=preds_vd, numSolsExtracting=NSE, edge_reuse_DFS=True, flag = "dummy")
 
         # plot_edge_reuse_matrix_list_median(df, len(As[0]))
         # breakpoint()
-        plot_edge_reuse_matrix_list_mean_dfs(df, len(As[0]))
-        line_plot_dfs(df, len(As[0]))
+        plot_edge_reuse_matrix_list_mean_dfs(df, payload.graph_size)
+        line_plot_dfs(df, payload.graph_size)
 
     ### We need preds and A. We want to
     # 1. Sample from preds a candidate tree
