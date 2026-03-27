@@ -7,7 +7,7 @@ from clrs._src.multi_sol.training.output_head import multisol_softmax
 
 
 def kl_divergence_truth_pred(truth, pred_logits, epsilon: float = 1e-8):
-  """KL divergence utility matching existing MULT_SOL training behavior."""
+  """KL divergence utility matching MULTI_SOLUTION training behavior."""
   return jnp.mean(
       kl_divergence_truth_pred_elementwise(
           truth=truth,

@@ -17,7 +17,7 @@
 
 from typing import Dict, List, Tuple
 import chex
-from clrs._src.multi_sol.evaluation import metrics as multisol_metrics
+from clrs._src.multi_sol.evaluation import policies as multisol_eval_policies
 from clrs._src import probing
 from clrs._src import specs
 import numpy as np
@@ -211,6 +211,6 @@ _EVAL_FN = {
         _eval_one,
     specs.Type.POINTER:
         lambda pred, truth: np.mean((pred == truth) * 1.0),
-    specs.Type.MULT_SOL:
-        multisol_metrics.multisol_score,
 }
+
+_EVAL_FN.update(multisol_eval_policies.registered_type_evals())

@@ -9,6 +9,7 @@ import numpy as np
 
 from clrs._src.multi_sol.data.adapters import concat_tree
 from clrs._src.multi_sol.data.adapters import extract_bfs_graph_and_source
+from clrs._src.multi_sol.evaluation import reporting
 from clrs._src.multi_sol.evaluation import reports
 from clrs._src.multi_sol.evaluation.runners import evaluate_sampling_pair
 from clrs._src.multi_sol.sampling import bfs as bfs_sampling
@@ -22,7 +23,7 @@ def evaluate_bfs_multisol_batch(
     sample_count,
     rng_key,
     extras,
-    save_results_fn,
+    save_results_fn=None,
     filename="bfs_accuracy",
 ) -> Dict[str, float]:
   """Collect, evaluate, sample, validate and save BFS multi-solution results."""
@@ -99,7 +100,8 @@ def evaluate_bfs_multisol_batch(
       prim=prim,
       beam=beam,
   )
-  save_results_fn(result_dict, f"{filename}_BFS")
+  report_sink = save_results_fn or reporting.discard_report
+  report_sink(result_dict, f"{filename}_BFS")
 
   if extras:
     out.update(copy.deepcopy(extras))

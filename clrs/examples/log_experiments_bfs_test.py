@@ -3,6 +3,7 @@ import pathlib
 import sys
 import types
 import unittest
+import warnings
 
 
 _MISSING = object()
@@ -16,7 +17,7 @@ def _find_repo_root() -> pathlib.Path:
   raise RuntimeError("Could not locate repository root from test path.")
 
 
-class BfsCollectAndEvalWrapperTest(unittest.TestCase):
+class LogExperimentsWrapperTest(unittest.TestCase):
 
   def setUp(self):
     self._saved_modules = {}
@@ -46,93 +47,42 @@ class BfsCollectAndEvalWrapperTest(unittest.TestCase):
     self._install_module(name, module)
     return module
 
-  def _load_log_experiments(self, plugin_fn):
+  def _load_log_experiments(self, bfs_plugin, dfs_plugin, bf_plugin):
     self._install_package("clrs")
     self._install_package("clrs._src")
-    self._install_package("clrs._src.algorithms")
     self._install_package("clrs._src.multi_sol")
     self._install_package("clrs._src.multi_sol.algorithms")
     self._install_package("clrs._src.multi_sol.algorithms.bfs")
-    self._install_package("clrs._src.multi_sol.data")
-    self._install_package("clrs._src.multi_sol.sampling")
     self._install_package("clrs._src.multi_sol.algorithms.dfs")
     self._install_package("clrs._src.multi_sol.algorithms.bellman_ford")
+    self._install_package("clrs._src.multi_sol.evaluation")
+
+    class _DataFrameStub:
+
+      @staticmethod
+      def from_dict(_data):
+        return types.SimpleNamespace(to_csv=lambda *args, **kwargs: None)
 
     pandas_module = types.ModuleType("pandas")
-    pandas_module.set_option = lambda *args, **kwargs: None
-    pandas_module.DataFrame = type("DataFrame", (), {"from_dict": staticmethod(dict)})
+    pandas_module.DataFrame = _DataFrameStub
     self._install_module("pandas", pandas_module)
 
-    jax_module = types.ModuleType("jax")
-    jax_module.tree_util = types.SimpleNamespace(tree_map=lambda f, *x: f(*x))
-    self._install_module("jax", jax_module)
+    reporting_module = types.ModuleType("clrs._src.multi_sol.evaluation.reporting")
+    reporting_module.save_csv_report = lambda *args, **kwargs: None
+    self._install_module("clrs._src.multi_sol.evaluation.reporting",
+                         reporting_module)
 
-    self._install_module("clrs._src.dfs_sampling",
-                         types.ModuleType("clrs._src.dfs_sampling"))
-    self._install_module("clrs._src.dfs_uniqueness_check",
-                         types.ModuleType("clrs._src.dfs_uniqueness_check"))
-    dfs_sampling_module = types.ModuleType("clrs._src.multi_sol.sampling.dfs")
-    dfs_sampling_module.sample_random_list = lambda data: []
-    dfs_sampling_module.sample_argmax = lambda data: []
-    dfs_sampling_module.sample_argmax_listofdict = lambda data: []
-    dfs_sampling_module.sample_argmax_listofdatapoint = lambda data: []
-    dfs_sampling_module.sample_upwards = lambda data: []
-    dfs_sampling_module.sample_altUpwards = lambda data: []
-    self._install_module("clrs._src.multi_sol.sampling.dfs", dfs_sampling_module)
-
-    bf_sampling_module = types.ModuleType("clrs._src.multi_sol.sampling.bellman_ford")
-    bf_sampling_module.sample_beamsearch = lambda *args, **kwargs: []
-    bf_sampling_module.sample_greedysearch = lambda *args, **kwargs: []
-    self._install_module("clrs._src.multi_sol.sampling.bellman_ford",
-                         bf_sampling_module)
-
-    check_graphs_module = types.ModuleType("clrs._src.algorithms.check_graphs")
-    dfs_verify_module = types.ModuleType(
-        "clrs._src.algorithms.dfs_verification_tester")
-    self._install_module("clrs._src.algorithms.check_graphs", check_graphs_module)
-    self._install_module("clrs._src.algorithms.dfs_verification_tester",
-                         dfs_verify_module)
-
-    bf_beamsearch_module = types.ModuleType("clrs._src.algorithms.BF_beamsearch")
-    bf_beamsearch_module.sample_beamsearch = lambda *args, **kwargs: None
-    bf_beamsearch_module.sample_greedysearch = lambda *args, **kwargs: None
-    self._install_module("clrs._src.algorithms.BF_beamsearch", bf_beamsearch_module)
-
-    bf_uniqueness_module = types.ModuleType("clrs._src.bf_uniqueness_check")
-    bf_uniqueness_module.check_uniqueness_bf = lambda *args, **kwargs: None
-    self._install_module("clrs._src.bf_uniqueness_check", bf_uniqueness_module)
-
-    validate_module = types.ModuleType("clrs._src.validate_distributions")
-    validate_module.plot_edge_reuse_matrix_list_mean = lambda *args, **kwargs: None
-    validate_module.plot_edge_reuse_matrix_list_mean_dfs = (
-        lambda *args, **kwargs: None)
-    validate_module.plot_n_unique_by_n_extracted = lambda *args, **kwargs: None
-    validate_module.plot_n_unique_by_n_extracted_dfs = (
-        lambda *args, **kwargs: None)
-    validate_module.line_plot = lambda *args, **kwargs: None
-    validate_module.line_plot_dfs = lambda *args, **kwargs: None
-    self._install_module("clrs._src.validate_distributions", validate_module)
-
-    distribution_generation = types.ModuleType(
-        "clrs._src.multi_sol.data.distribution_generation")
-    distribution_generation.build_bf_validation_payload = (
-        lambda *args, **kwargs: None)
-    distribution_generation.build_dfs_validation_payload = (
-        lambda *args, **kwargs: None)
-    distribution_generation.generate_validation_dataframes = (
-        lambda *args, **kwargs: ([], [], []))
-    self._install_module("clrs._src.multi_sol.data.distribution_generation",
-                         distribution_generation)
-
-    plugin_module = types.ModuleType("clrs._src.multi_sol.algorithms.bfs.plugin")
-    plugin_module.evaluate_bfs_multisol_batch = plugin_fn
-    self._install_module("clrs._src.multi_sol.algorithms.bfs.plugin", plugin_module)
+    bfs_plugin_module = types.ModuleType("clrs._src.multi_sol.algorithms.bfs.plugin")
+    bfs_plugin_module.evaluate_bfs_multisol_batch = bfs_plugin
+    self._install_module("clrs._src.multi_sol.algorithms.bfs.plugin",
+                         bfs_plugin_module)
     dfs_plugin_module = types.ModuleType("clrs._src.multi_sol.algorithms.dfs.plugin")
-    dfs_plugin_module.evaluate_dfs_multisol_batch = lambda **kwargs: {"delegated_dfs": 1.0}
-    self._install_module("clrs._src.multi_sol.algorithms.dfs.plugin", dfs_plugin_module)
+    dfs_plugin_module.evaluate_dfs_multisol_batch = dfs_plugin
+    self._install_module("clrs._src.multi_sol.algorithms.dfs.plugin",
+                         dfs_plugin_module)
     bf_plugin_module = types.ModuleType(
         "clrs._src.multi_sol.algorithms.bellman_ford.plugin")
-    bf_plugin_module.evaluate_bf_multisol_batch = lambda **kwargs: {"delegated_bf": 1.0}
+    bf_plugin_module.evaluate_bf_multisol_batch = bf_plugin
     self._install_module("clrs._src.multi_sol.algorithms.bellman_ford.plugin",
                          bf_plugin_module)
 
@@ -146,36 +96,201 @@ class BfsCollectAndEvalWrapperTest(unittest.TestCase):
     spec.loader.exec_module(module)
     return module
 
-  def test_bfs_multi_collect_and_eval_delegates_to_plugin(self):
-    captured = {}
-
-    def plugin_fn(**kwargs):
-      captured.update(kwargs)
-      return {"delegated": 1.0}
-
-    module = self._load_log_experiments(plugin_fn)
-    sampler = object()
-    predict_fn = object()
-    extras = {"extra": "value"}
-    result = module.BFS_multi_collect_and_eval(
-        sampler=sampler,
-        predict_fn=predict_fn,
-        sample_count=7,
-        rng_key=123,
-        extras=extras,
-        filename="regression",
-        vd_flag=True,
-        NSE=11,
+  def _assert_deprecation_warning(self, caught, symbol):
+    self.assertTrue(
+        any(symbol in str(warning.message) for warning in caught),
+        msg=f"Expected deprecation warning mentioning `{symbol}`.",
     )
 
-    self.assertEqual(result, {"delegated": 1.0})
-    self.assertIs(captured["sampler"], sampler)
-    self.assertIs(captured["predict_fn"], predict_fn)
-    self.assertEqual(captured["sample_count"], 7)
-    self.assertEqual(captured["rng_key"], 123)
-    self.assertEqual(captured["extras"], extras)
+  def test_bfs_wrapper_delegates_to_plugin(self):
+    captured = {}
+
+    def bfs_plugin(**kwargs):
+      captured.update(kwargs)
+      return {"delegated_bfs": 1.0}
+
+    module = self._load_log_experiments(
+        bfs_plugin=bfs_plugin,
+        dfs_plugin=lambda **kwargs: {"delegated_dfs": 1.0},
+        bf_plugin=lambda **kwargs: {"delegated_bf": 1.0},
+    )
+    with warnings.catch_warnings(record=True) as caught:
+      warnings.simplefilter("always")
+      result = module.BFS_multi_collect_and_eval(
+          sampler="sampler",
+          predict_fn="predict",
+          sample_count=7,
+          rng_key=123,
+          extras={"extra": True},
+          filename="regression",
+          vd_flag=True,
+          NSE=11,
+      )
+
+    self.assertEqual(result, {"delegated_bfs": 1.0})
     self.assertEqual(captured["filename"], "regression")
     self.assertIs(captured["save_results_fn"], module.save_results)
+    self.assertNotIn("vd_flag", captured)
+    self.assertNotIn("NSE", captured)
+    self._assert_deprecation_warning(caught, "BFS_multi_collect_and_eval")
+
+  def test_dfs_wrapper_forwards_validation_args(self):
+    captured = {}
+
+    def dfs_plugin(**kwargs):
+      captured.update(kwargs)
+      return {"delegated_dfs": 1.0}
+
+    module = self._load_log_experiments(
+        bfs_plugin=lambda **kwargs: {"delegated_bfs": 1.0},
+        dfs_plugin=dfs_plugin,
+        bf_plugin=lambda **kwargs: {"delegated_bf": 1.0},
+    )
+    with warnings.catch_warnings(record=True) as caught:
+      warnings.simplefilter("always")
+      result = module.DFS_collect_and_eval(
+          sampler="sampler",
+          predict_fn="predict",
+          sample_count=9,
+          rng_key=456,
+          extras={"flag": "x"},
+          filename="dfs_run",
+          vd_flag=True,
+          NSE=33,
+      )
+
+    self.assertEqual(result, {"delegated_dfs": 1.0})
+    self.assertEqual(captured["filename"], "dfs_run")
+    self.assertTrue(captured["vd_flag"])
+    self.assertEqual(captured["NSE"], 33)
+    self.assertIs(captured["save_results_fn"], module.save_results)
+    self._assert_deprecation_warning(caught, "DFS_collect_and_eval")
+
+  def test_bf_wrapper_forwards_validation_args(self):
+    captured = {}
+
+    def bf_plugin(**kwargs):
+      captured.update(kwargs)
+      return {"delegated_bf": 1.0}
+
+    module = self._load_log_experiments(
+        bfs_plugin=lambda **kwargs: {"delegated_bfs": 1.0},
+        dfs_plugin=lambda **kwargs: {"delegated_dfs": 1.0},
+        bf_plugin=bf_plugin,
+    )
+    with warnings.catch_warnings(record=True) as caught:
+      warnings.simplefilter("always")
+      result = module.BF_collect_and_eval(
+          sampler="sampler",
+          predict_fn="predict",
+          sample_count=5,
+          rng_key=789,
+          extras={"flag": "y"},
+          filename="bf_run",
+          vd_flag=False,
+          NSE=22,
+      )
+
+    self.assertEqual(result, {"delegated_bf": 1.0})
+    self.assertEqual(captured["filename"], "bf_run")
+    self.assertFalse(captured["vd_flag"])
+    self.assertEqual(captured["NSE"], 22)
+    self.assertIs(captured["save_results_fn"], module.save_results)
+    self._assert_deprecation_warning(caught, "BF_collect_and_eval")
+
+  def test_bfs_wrapper_allows_explicit_sink_override(self):
+    captured = {}
+
+    def bfs_plugin(**kwargs):
+      captured.update(kwargs)
+      return {"delegated_bfs": 1.0}
+
+    module = self._load_log_experiments(
+        bfs_plugin=bfs_plugin,
+        dfs_plugin=lambda **kwargs: {"delegated_dfs": 1.0},
+        bf_plugin=lambda **kwargs: {"delegated_bf": 1.0},
+    )
+    custom_sink = lambda *_args, **_kwargs: None
+    with warnings.catch_warnings(record=True) as caught:
+      warnings.simplefilter("always")
+      module.BFS_multi_collect_and_eval(
+          sampler="sampler",
+          predict_fn="predict",
+          sample_count=3,
+          rng_key=99,
+          extras={},
+          filename="regression",
+          save_results_fn=custom_sink,
+      )
+    self.assertIs(captured["save_results_fn"], custom_sink)
+    self._assert_deprecation_warning(caught, "BFS_multi_collect_and_eval")
+
+  def test_save_results_delegates_to_reporting_sink(self):
+    writes = {}
+
+    self._install_package("clrs")
+    self._install_package("clrs._src")
+    self._install_package("clrs._src.multi_sol")
+    self._install_package("clrs._src.multi_sol.algorithms")
+    self._install_package("clrs._src.multi_sol.algorithms.bfs")
+    self._install_package("clrs._src.multi_sol.algorithms.dfs")
+    self._install_package("clrs._src.multi_sol.algorithms.bellman_ford")
+    self._install_package("clrs._src.multi_sol.evaluation")
+
+    reporting_module = types.ModuleType("clrs._src.multi_sol.evaluation.reporting")
+    reporting_module.save_csv_report = (
+        lambda result_dict, filename: writes.update({
+            "result_dict": result_dict,
+            "filename": filename,
+        }))
+    self._install_module("clrs._src.multi_sol.evaluation.reporting",
+                         reporting_module)
+
+    bfs_plugin_module = types.ModuleType("clrs._src.multi_sol.algorithms.bfs.plugin")
+    bfs_plugin_module.evaluate_bfs_multisol_batch = lambda **kwargs: {}
+    self._install_module("clrs._src.multi_sol.algorithms.bfs.plugin",
+                         bfs_plugin_module)
+    dfs_plugin_module = types.ModuleType("clrs._src.multi_sol.algorithms.dfs.plugin")
+    dfs_plugin_module.evaluate_dfs_multisol_batch = lambda **kwargs: {}
+    self._install_module("clrs._src.multi_sol.algorithms.dfs.plugin",
+                         dfs_plugin_module)
+    bf_plugin_module = types.ModuleType(
+        "clrs._src.multi_sol.algorithms.bellman_ford.plugin")
+    bf_plugin_module.evaluate_bf_multisol_batch = lambda **kwargs: {}
+    self._install_module("clrs._src.multi_sol.algorithms.bellman_ford.plugin",
+                         bf_plugin_module)
+
+    module_path = self._repo_root / "clrs" / "examples" / "log_experiments.py"
+    spec = importlib.util.spec_from_file_location("clrs.examples.log_experiments",
+                                                  str(module_path))
+    module = importlib.util.module_from_spec(spec)
+    self._install_module("clrs.examples", self._install_package("clrs.examples"))
+    self._install_module("clrs.examples.log_experiments", module)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    with warnings.catch_warnings(record=True) as caught:
+      warnings.simplefilter("always")
+      module.save_results({"a": [1]}, "sample")
+
+    self.assertEqual(writes["result_dict"], {"a": [1]})
+    self.assertEqual(writes["filename"], "sample")
+    self._assert_deprecation_warning(caught, "save_results")
+
+  def test_main_exits_with_deprecation_guidance(self):
+    module = self._load_log_experiments(
+        bfs_plugin=lambda **kwargs: {"delegated_bfs": 1.0},
+        dfs_plugin=lambda **kwargs: {"delegated_dfs": 1.0},
+        bf_plugin=lambda **kwargs: {"delegated_bf": 1.0},
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+      warnings.simplefilter("always")
+      with self.assertRaises(SystemExit) as ctx:
+        module.main()
+
+    self.assertIn("clrs.examples.run", str(ctx.exception))
+    self._assert_deprecation_warning(caught, "__main__")
 
 
 if __name__ == "__main__":

@@ -17,7 +17,7 @@
 from typing import Dict, List, Tuple
 import chex
 
-from clrs._src.multi_sol.training import objectives as multisol_objectives
+from clrs._src.multi_sol.training import policies as multisol_policies
 from clrs._src import probing
 from clrs._src import specs
 
@@ -76,10 +76,12 @@ def output_loss_chunked(truth: _DataPoint, pred: _Array,
     # Compute the cross entropy between doubly stochastic pred and truth_data
     loss = -jnp.sum(truth.data * pred, axis=-1)
 
-  elif truth.type_ == _Type.MULT_SOL:
-    # Predictions are NxN logits. Compute row-wise KL(truth || pred_probs).
-    loss = multisol_objectives.kl_divergence_truth_pred_elementwise(
-        truth.data, pred)
+  else:
+    custom_loss = multisol_policies.output_loss_elementwise_for_type(
+        truth.type_, truth.data, pred)
+    if custom_loss is None:
+      raise ValueError(f"Invalid output type {truth.type_}")
+    loss = custom_loss
 
   if mask is not None:
     mask = mask * _expand_and_broadcast_to(is_last, loss)
@@ -119,8 +121,12 @@ def output_loss(truth: _DataPoint, pred: _Array, nb_nodes: int) -> float:
     # Compute the cross entropy between doubly stochastic pred and truth_data
     total_loss = jnp.mean(-jnp.sum(truth.data * pred, axis=-1))
 
-  elif truth.type_ == _Type.MULT_SOL:
-    total_loss = multisol_objectives.kl_divergence_truth_pred(truth.data, pred)
+  else:
+    custom_total = multisol_policies.output_loss_for_type(
+        truth.type_, truth.data, pred)
+    if custom_total is None:
+      raise ValueError(f"Invalid output type {truth.type_}")
+    total_loss = custom_total
 
   return total_loss  # pytype: disable=bad-return-type  # jnp-type
 
@@ -207,9 +213,12 @@ def _hint_loss(
     # Compute the cross entropy between doubly stochastic pred and truth_data
     loss = -jnp.sum(truth_data * pred, axis=-1)
 
-  elif truth_type == _Type.MULT_SOL:
-    loss = multisol_objectives.kl_divergence_truth_pred_elementwise(
-        truth_data, pred)
+  else:
+    custom_hint_loss = multisol_policies.hint_loss_elementwise_for_type(
+        truth_type, truth_data, pred)
+    if custom_hint_loss is None:
+      raise ValueError(f"Invalid hint type {truth_type}")
+    loss = custom_hint_loss
 
   if mask is None:
     mask = jnp.ones_like(loss)

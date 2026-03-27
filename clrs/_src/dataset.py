@@ -29,6 +29,16 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 
 
+def _get_resolved_specs():
+  from clrs._src.multi_sol.core import registry as multisol_registry
+  return multisol_registry.resolve_specs(specs.SPECS)
+
+
+def _get_dataset_algorithms():
+  from clrs._src.multi_sol.core import registry as multisol_registry
+  return multisol_registry.get_extension_algorithms(specs.CLRS_30_ALGS)
+
+
 def _correct_axis_filtering(tensor, index, name):
   if 'hint_' in name:
     return tensor[:, index]
@@ -43,11 +53,12 @@ class CLRSConfig(tfds.core.BuilderConfig):
 
 
 DEFAULT_BUILDER_CONFIGS = []
+DEFAULT_ALGO_SETTINGS = {'num_samples_multiplier': 1}
 
 
 def _build_default_builder_configs():
   for split in ['train', 'val', 'test']:
-    for alg in specs.CLRS_30_ALGS:
+    for alg in _get_dataset_algorithms():
       DEFAULT_BUILDER_CONFIGS.append(
           CLRSConfig(name=f'{alg}_{split}', split=split))
 
@@ -73,8 +84,9 @@ class CLRSDataset(tfds.core.GeneratorBasedBuilder):
     if self._builder_config.split != 'train':  # pytype: disable=attribute-error  # always-use-return-annotations
       # Generate more samples for those algorithms in which the number of
       # signals is small.
-      num_samples *= specs.CLRS_30_ALGS_SETTINGS[algorithm_name][
-          'num_samples_multiplier']
+      settings = specs.CLRS_30_ALGS_SETTINGS.get(
+          algorithm_name, DEFAULT_ALGO_SETTINGS)
+      num_samples *= settings['num_samples_multiplier']
     return num_samples
 
   def _create_data(self, single_sample):
@@ -159,7 +171,8 @@ def _preprocess(data_point, algorithm=None):
       continue
     data_point_name = name.split('_')
     name = '_'.join(data_point_name[1:])
-    (stage, location, dp_type) = specs.SPECS[algorithm][name]
+    resolved_specs = _get_resolved_specs()
+    (stage, location, dp_type) = resolved_specs[algorithm][name]
     assert stage == data_point_name[0]
     if stage == specs.Stage.HINT:
       data = tf.experimental.numpy.swapaxes(data, 0, 1)
@@ -182,7 +195,7 @@ def create_dataset(folder, algorithm, split, batch_size):
   dataset = dataset.batch(batch_size)
   return (dataset.map(lambda d: _preprocess(d, algorithm=algorithm)),
           num_samples,
-          specs.SPECS[algorithm])
+          _get_resolved_specs()[algorithm])
 
 
 def _copy_hint(source, dest, i, start_source, start_dest, to_add):
@@ -323,4 +336,4 @@ def create_chunked_dataset(folder, algorithm, split, batch_size, chunk_length):
   dataset = dataset.batch(batch_size)
   dataset = dataset.map(lambda d: _preprocess(d, algorithm=algorithm))
   dataset = dataset.as_numpy_iterator()
-  return chunkify(dataset, chunk_length), specs.SPECS[algorithm]
+  return chunkify(dataset, chunk_length), _get_resolved_specs()[algorithm]

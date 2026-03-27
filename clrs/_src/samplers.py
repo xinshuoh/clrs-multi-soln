@@ -25,6 +25,7 @@ from absl import logging
 
 from clrs._src import algorithms
 from clrs._src.multi_sol.data import samplers as multisol_samplers
+from clrs._src.multi_sol.core import registry as multisol_registry
 from clrs._src import probing
 from clrs._src import specs
 import jax
@@ -289,9 +290,10 @@ def build_sampler(
 ) -> Tuple[Sampler, specs.Spec]:
   """Builds a sampler. See `Sampler` documentation."""
 
-  if name not in specs.SPECS or name not in SAMPLERS:
+  resolved_specs = multisol_registry.resolve_specs(specs.SPECS)
+  if name not in resolved_specs or name not in SAMPLERS:
     raise NotImplementedError(f'No implementation of algorithm {name}.')
-  spec = specs.SPECS[name]
+  spec = resolved_specs[name]
   algorithm = getattr(algorithms, name)
   sampler_class = SAMPLERS[name]
   # Ignore kwargs not accepted by the sampler.
@@ -728,6 +730,11 @@ SAMPLERS = {
     'graham_scan': ConvexHullSampler,
     'jarvis_march': ConvexHullSampler,
 }
+
+for _extension_name in multisol_registry.list_extensions():
+  _extension = multisol_registry.get_extension(_extension_name)
+  if _extension and _extension.sampler_factory is not None:
+    SAMPLERS[_extension_name] = _extension.sampler_factory()
 
 
 def _batch_io(traj_io: Trajectories) -> Trajectory:

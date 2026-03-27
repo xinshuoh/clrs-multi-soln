@@ -158,6 +158,10 @@ class EvaluateBfsPluginTest(unittest.TestCase):
         self._repo_root / "clrs" / "_src" / "multi_sol" / "evaluation" /
         "reports.py")
     self._load_module("clrs._src.multi_sol.evaluation.reports", reports_path)
+    reporting_module = types.ModuleType("clrs._src.multi_sol.evaluation.reporting")
+    reporting_module.discard_report = lambda *_args, **_kwargs: None
+    self._install_module("clrs._src.multi_sol.evaluation.reporting",
+                         reporting_module)
 
     bfs_sampling_module = types.ModuleType("clrs._src.multi_sol.sampling.bfs")
     bfs_sampling_module.sample_bfs_categorical = _stub_bfs_sample_argmax
@@ -249,6 +253,59 @@ class EvaluateBfsPluginTest(unittest.TestCase):
     self.assertEqual(saved["filename"], "bfs_smoke_BFS")
     self.assertIn("Categorical_Model_Accuracy", saved["result_dict"])
     self.assertIn("Beam_True_Accuracy", saved["result_dict"])
+    self.assertEqual(out["score"], 0.75)
+    self.assertEqual(out["tag"], "ok")
+
+  def test_evaluate_bfs_multisol_batch_without_report_sink(self):
+    plugin = self._load_plugin_with_stubs()
+
+    adjacency = np.array([
+        [[0, 1, 1], [1, 0, 0], [1, 0, 0]],
+        [[0, 1, 0], [1, 0, 1], [0, 1, 0]],
+    ])
+    source_one_hot = np.array([[1, 0, 0], [0, 1, 0]])
+    output_prob = np.array([
+        [[1.0, 0.0, 0.0], [0.8, 0.2, 0.0], [0.7, 0.3, 0.0]],
+        [[0.2, 0.8, 0.0], [0.0, 1.0, 0.0], [0.1, 0.9, 0.0]],
+    ])
+    pred_prob = np.array([
+        [[1.0, 0.0, 0.0], [0.9, 0.1, 0.0], [0.9, 0.1, 0.0]],
+        [[0.3, 0.7, 0.0], [0.0, 1.0, 0.0], [0.2, 0.8, 0.0]],
+    ])
+
+    feedback = Feedback(
+        features=Features(
+            inputs=[
+                DummyDataPoint(np.zeros((2, 3))),
+                DummyDataPoint(source_one_hot),
+                DummyDataPoint(adjacency),
+            ],
+            hints=[],
+            lengths=np.array([3, 3]),
+        ),
+        outputs=[DummyDataPoint(output_prob)],
+    )
+
+    class ConstantSampler:
+      def __iter__(self):
+        return self
+
+      def __next__(self):
+        return feedback
+
+    def predict_fn(rng_key, features):
+      del rng_key, features
+      return {"pi": DummyDataPoint(pred_prob)}, None
+
+    out = plugin.evaluate_bfs_multisol_batch(
+        sampler=iter(ConstantSampler()),
+        predict_fn=predict_fn,
+        sample_count=2,
+        rng_key=5,
+        extras={"tag": "ok"},
+        filename="bfs_smoke",
+    )
+
     self.assertEqual(out["score"], 0.75)
     self.assertEqual(out["tag"], "ok")
 

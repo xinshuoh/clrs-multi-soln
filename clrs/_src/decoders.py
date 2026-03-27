@@ -18,7 +18,7 @@ import functools
 from typing import Dict, Optional
 
 import chex
-from clrs._src.multi_sol.training import output_head as multisol_output_head
+from clrs._src.multi_sol.training import policies as multisol_policies
 from clrs._src import probing
 from clrs._src import specs
 import haiku as hk
@@ -78,13 +78,12 @@ def construct_decoders(loc: str, t: str, hidden_dim: int, nb_dims: int,
     elif t in [_Type.POINTER, _Type.PERMUTATION_POINTER]:
       decoders = (linear(hidden_dim), linear(hidden_dim), linear(hidden_dim),
                   linear(1))
-    elif t == _Type.MULT_SOL:
-      decoders = (linear(hidden_dim), linear(hidden_dim), linear(hidden_dim),
-                  linear(1)) #FIXME
-    # TODO make sure no negative preds!
-    # if doesn't work, try 4 linear of hidden_dimension, use instead of maximum
     else:
-      raise ValueError(f"Invalid Type {t}")
+      custom_decoders = multisol_policies.construct_node_decoders_for_type(
+          t, linear, hidden_dim, nb_dims)
+      if custom_decoders is None:
+        raise ValueError(f"Invalid Type {t}")
+      decoders = custom_decoders
 
   elif loc == _Location.EDGE:
     # Edge decoders.
@@ -194,10 +193,11 @@ def postprocess(spec: _Spec, preds: Dict[str, _Array],
       data = jnp.exp(data)
       if hard:
         data = jax.nn.one_hot(jnp.argmax(data, axis=-1), data.shape[-1])
-    elif t == _Type.MULT_SOL:
-      data = multisol_output_head.multisol_softmax(data, axis=-1)
     else:
-      raise ValueError("Invalid type")
+      processed = multisol_policies.postprocess_for_type(t, data, hard)
+      if processed is None:
+        raise ValueError("Invalid type")
+      data, new_t = processed
     result[name] = probing.DataPoint(
         name=name, location=loc, type_=new_t, data=data)
 
@@ -252,40 +252,21 @@ def _decode_node_fts(decoders, t: str, h_t: _Array, edge_fts: _Array,
     preds = jnp.squeeze(decoders[0](h_t), -1)
   elif t == _Type.CATEGORICAL:
     preds = decoders[0](h_t)
-  elif t == _Type.MULT_SOL:
-    # breakpoint() weird! if you have this breakpoint and continue, you get an error. But run without, no error arises
-    p_1 = decoders[0](h_t)  # from vector:  shape [batch,nodes,hidden]
-    p_2 = decoders[1](h_t)  # to vector:  shape [batch,nodes,hidden]
-    p_3 = decoders[2](edge_fts)  # edge features: [batch,nodes,nodes,hidden]
-
-    p_e = jnp.expand_dims(p_2, -2) + p_3  # [batch,nodes,1,hidden] summed with [batch,nodes,nodes,hidden]
-    # to_i  + edge_ij: [batch,nodes_i,nodes_j,hidden]
-
-    p_m = jnp.maximum(jnp.expand_dims(p_1, -2),  # [batch,nodes_i,1,hidden] -> [batch,nodes_i,nodes_i,hidden]
-                      jnp.transpose(p_e, (0, 2, 1, 3)))  # [batch, nodes_j, nodes_i, hidden]
-    # p_m shape [batch, nodes_j, nodes_i, hidden]
-    # computed elementwise max of (to_i + edge_ij, from_i)
-
-    preds = jnp.squeeze(decoders[3](p_m), -1)  # cut out hidden dimension
-
-    # in-case this doesn't work. instead of jnp.maximum, another decoder.
-    # decoders.for
-
-    if inf_bias:
-      per_batch_min = jnp.min(preds, axis=range(1, preds.ndim), keepdims=True)
-      preds = jnp.where(adj_mat > 0.5,
-                        preds,
-                        jnp.minimum(-1.0, per_batch_min - 1.0))
-    if t == _Type.PERMUTATION_POINTER:
-      if repred:  # testing or validation, no Gumbel noise
-        preds = log_sinkhorn(
-            x=preds, steps=10, temperature=0.1,
-            zero_diagonal=True, noise_rng_key=None)
-      else:  # training, add Gumbel noise
-        preds = log_sinkhorn(
-            x=preds, steps=10, temperature=0.1,
-            zero_diagonal=True, noise_rng_key=hk.next_rng_key())
-  elif t in [_Type.POINTER, _Type.PERMUTATION_POINTER]:
+  else:
+    custom_preds = multisol_policies.decode_node_logits_for_type(
+        type_name=t,
+        decoders=decoders,
+        h_t=h_t,
+        edge_fts=edge_fts,
+        adj_mat=adj_mat,
+        inf_bias=inf_bias,
+        repred=repred,
+    )
+    if custom_preds is not None:
+      preds = custom_preds
+      return preds
+    if t not in [_Type.POINTER, _Type.PERMUTATION_POINTER]:
+      raise ValueError("Invalid output type")
     p_1 = decoders[0](h_t) # from vector
     p_2 = decoders[1](h_t) # to vector  shape [batch,nodes,hidden]
     p_3 = decoders[2](edge_fts) # edge features [batch,nodes,nodes,hidden]
@@ -318,8 +299,6 @@ def _decode_node_fts(decoders, t: str, h_t: _Array, edge_fts: _Array,
         preds = log_sinkhorn(
             x=preds, steps=10, temperature=0.1,
             zero_diagonal=True, noise_rng_key=hk.next_rng_key())
-  else:
-    raise ValueError("Invalid output type")
 
   return preds
 

@@ -55,7 +55,10 @@ class Type:
   SHOULD_BE_PERMUTATION = 'should_be_permutation'
   PERMUTATION_POINTER = 'permutation_pointer'
   SOFT_POINTER = 'soft_pointer'
-  MULT_SOL = 'mult_sol'
+  MULTI_SOLUTION = 'mult_sol'
+  # Deprecated compatibility alias. New extensions should use
+  # `Type.MULTI_SOLUTION`; remove `MULT_SOL` after parity tests pass.
+  MULT_SOL = MULTI_SOLUTION
 
 
 class OutputClass:
@@ -280,7 +283,7 @@ SPECS = types.MappingProxyType({
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
         'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
         'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
-        # 'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL), # matrix of probabilities
+        # 'pi': (Stage.OUTPUT, Location.NODE, Type.MULTI_SOLUTION), # matrix of probabilities
         'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
         'color': (Stage.HINT, Location.NODE, Type.CATEGORICAL),
         'd': (Stage.HINT, Location.NODE, Type.SCALAR),
@@ -297,7 +300,7 @@ SPECS = types.MappingProxyType({
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
         'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
         #'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
-        'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL), # matrix of probabilities
+        'pi': (Stage.OUTPUT, Location.NODE, Type.MULTI_SOLUTION), # matrix of probabilities
         'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
         'color': (Stage.HINT, Location.NODE, Type.CATEGORICAL),
         'd': (Stage.HINT, Location.NODE, Type.SCALAR),
@@ -385,7 +388,7 @@ SPECS = types.MappingProxyType({
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
         'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
         'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
-        # 'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL), # matrix of probabilities
+        # 'pi': (Stage.OUTPUT, Location.NODE, Type.MULTI_SOLUTION), # matrix of probabilities
         'reach_h': (Stage.HINT, Location.NODE, Type.MASK),
         'pi_h': (Stage.HINT, Location.NODE, Type.POINTER)
     },
@@ -395,7 +398,7 @@ SPECS = types.MappingProxyType({
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
         'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
         # 'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
-        'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL), # matrix of probabilities
+        'pi': (Stage.OUTPUT, Location.NODE, Type.MULTI_SOLUTION), # matrix of probabilities
         'reach_h': (Stage.HINT, Location.NODE, Type.MASK),
         'pi_h': (Stage.HINT, Location.NODE, Type.POINTER)
     },
@@ -432,7 +435,7 @@ SPECS = types.MappingProxyType({
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
         'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
         'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
-        # 'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL),
+        # 'pi': (Stage.OUTPUT, Location.NODE, Type.MULTI_SOLUTION),
         'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
         'd': (Stage.HINT, Location.NODE, Type.SCALAR),
         'msk': (Stage.HINT, Location.NODE, Type.MASK)
@@ -443,7 +446,7 @@ SPECS = types.MappingProxyType({
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
         'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
         # 'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
-        'pi': (Stage.OUTPUT, Location.NODE, Type.MULT_SOL),
+        'pi': (Stage.OUTPUT, Location.NODE, Type.MULTI_SOLUTION),
         'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
         'd': (Stage.HINT, Location.NODE, Type.SCALAR),
         'msk': (Stage.HINT, Location.NODE, Type.MASK)

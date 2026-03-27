@@ -10,5 +10,5 @@ def accuracy(mask: List[bool]) -> float:
 
 
 def multisol_score(pred, truth) -> float:
-  """Higher-is-better MULT_SOL similarity score."""
+  """Higher-is-better MULTI_SOLUTION similarity score."""
   return np.mean(1.0 - np.abs(pred - truth))

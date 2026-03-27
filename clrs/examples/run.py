@@ -18,11 +18,8 @@
 import functools
 import os
 import shutil
-import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-import scipy.special
-import torch
 from absl import app
 from absl import flags
 from absl import logging
@@ -31,38 +28,14 @@ import jax
 import numpy as np
 import requests
 import tensorflow as tf
-import sklearn.preprocessing
 
-#NEW
-import pandas as pd # saving results to dataframe for easy visualization
-import time         # measuring model training time
-import pickle       # saving model on kaggle
-import os
-from clrs._src import dfs_sampling
-from clrs._src import dfs_uniqueness_check
+from clrs._src.multi_sol.evaluation import dispatch as multisol_dispatch
 
-pd.set_option("max_colwidth", None)
-np.set_printoptions(threshold=sys.maxsize)
-from clrs.examples.log_experiments import DFS_collect_and_eval, BF_collect_and_eval, BFS_multi_collect_and_eval
 
-os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
-
-from clrs import _src
-from clrs._src.algorithms import check_graphs
-import clrs._src.dfs_sampling
-
-MULTISOL_EVAL_HANDLERS = {
-    "dfs_multi": DFS_collect_and_eval,
-    "bellman_ford_multi": BF_collect_and_eval,
-    "bfs_multi": BFS_multi_collect_and_eval,
-}
-
-flags.DEFINE_list('algorithms', ['dfs'], 'Which algorithms to run.')
+flags.DEFINE_list('algorithms', ['bfs'], 'Which algorithms to run.')
 flags.DEFINE_list('train_lengths', ['4', '7', '11', '13', '16'],
                   'Which training sizes to use. A size of -1 means '
                   'use the benchmark dataset.')
-flags.DEFINE_string("filename", "results", "The name of the file to be saved")
-flags.DEFINE_integer("test_length", 5, "Size of the graphs to be tested on")
 flags.DEFINE_integer('length_needle', -8,
                      'Length of needle for training and validation '
                      '(not testing) in string matching algorithms. '
@@ -84,7 +57,7 @@ flags.DEFINE_boolean('chunked_training', False,
 flags.DEFINE_integer('chunk_length', 16,
                      'Time chunk length used for training (if '
                      '`chunked_training` is True.')
-flags.DEFINE_integer('train_steps', 1000, 'Number of training iterations.')
+flags.DEFINE_integer('train_steps', 10000, 'Number of training iterations.')
 flags.DEFINE_integer('eval_every', 50, 'Evaluation frequency (in steps).')
 flags.DEFINE_integer('test_every', 500, 'Evaluation frequency (in steps).')
 
@@ -147,17 +120,19 @@ flags.DEFINE_string('dataset_path', '/tmp/CLRS30',
                     'Path in which dataset is stored.')
 flags.DEFINE_boolean('freeze_processor', False,
                      'Whether to freeze the processor of the model.')
-
-# NEW
-flags.DEFINE_boolean(name='results_df', default=False,
-                     help='Whether to save loss per step in df for plotting.')
-flags.DEFINE_boolean('save_df', False,
-                     'Whether to save model. !! Requires results_df=True !!')
-flags.DEFINE_boolean('save_model_to_file', False,
-                     'Whether to save model to .pkl or similar, intended for kaggle')
-flags.DEFINE_boolean('validate_distributions', default=False,
-                     help='Whether to create #unique by #samples figure, implementing for BF')  #FIXME more implement
-flags.DEFINE_integer('NSE', default = 25, help = "number of extracted solutions in distribution validation")
+flags.DEFINE_enum(
+    'evaluation_profile',
+    'default',
+    ['default', 'sampling'],
+    'Evaluation profile: default CLRS metrics or multi-solution sampling plugins.')
+flags.DEFINE_boolean(
+    'save_sampling_artifacts',
+    False,
+    'If true and evaluation_profile=sampling, persist plugin artifacts in results/.')
+flags.DEFINE_string(
+    'sampling_artifact_prefix',
+    'sampling_eval',
+    'Filename prefix for saved sampling artifacts.')
 
 FLAGS = flags.FLAGS
 
@@ -179,7 +154,7 @@ PRED_AS_INPUT_ALGOS = [
 
 def unpack(v):
   try:
-    return v.item()  # DeviceArray
+    return v.item()  # DeviceArray  # pytype: disable=attribute-error
   except (AttributeError, ValueError):
     return v
 
@@ -243,7 +218,6 @@ def make_sampler(length: int,
     if infinite samples), and the spec.
   """
   if length < 0:  # load from file
-    #print('run.py loading from dataset')
     dataset_folder = _maybe_download_dataset(FLAGS.dataset_path)
     sampler, num_samples, spec = clrs.create_dataset(folder=dataset_folder,
                                                      algorithm=algorithm,
@@ -307,13 +281,48 @@ def collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras):
   outputs = _concat(outputs, axis=0)
   preds = _concat(preds, axis=0)
   out = clrs.evaluate(outputs, preds)
-  #breakpoint()
   if extras:
     out.update(extras)
   return {k: unpack(v) for k, v in out.items()}
 
-def create_samplers(rng, train_lengths: List[int]):
-  """Create all the samplers."""
+
+def create_samplers(
+    rng,
+    train_lengths: List[int],
+    *,
+    algorithms: Optional[List[str]] = None,
+    val_lengths: Optional[List[int]] = None,
+    test_lengths: Optional[List[int]] = None,
+    train_batch_size: int = 32,
+    val_batch_size: int = 32,
+    test_batch_size: int = 32,
+):
+  """Create samplers for training, validation and testing.
+
+  Args:
+    rng: Numpy random state.
+    train_lengths: list of training lengths to use for each algorithm.
+    algorithms: list of algorithms to generate samplers for. Set to
+        FLAGS.algorithms if not provided.
+    val_lengths: list of lengths for validation samplers for each algorithm. Set
+        to maxumim training length if not provided.
+    test_lengths: list of lengths for test samplers for each algorithm. Set to
+        [-1] to use the benchmark dataset if not provided.
+    train_batch_size: batch size for training samplers.
+    val_batch_size: batch size for validation samplers.
+    test_batch_size: batch size for test samplers.
+
+  Returns:
+    Tuple of:
+      train_samplers: list of samplers for training.
+      val_samplers: list of samplers for validation.
+      val_sample_counts: list of sample counts for validation.
+      test_samplers: list of samplers for testing.
+      test_sample_counts: list of sample counts for testing.
+      spec_list: list of specs for each algorithm.
+
+  """
+
   train_samplers = []
   val_samplers = []
   val_sample_counts = []
@@ -321,21 +330,26 @@ def create_samplers(rng, train_lengths: List[int]):
   test_sample_counts = []
   spec_list = []
 
-  for algo_idx, algorithm in enumerate(FLAGS.algorithms):
-    # Make full dataset pipeline run on CPU (including prefetching).
-    with tf.device('/cpu:0'):
+  algorithms = algorithms or FLAGS.algorithms
+  for algo_idx, algorithm in enumerate(algorithms):
+    # Set the training lengths for the current algorithm.
+    current_algo_train_lengths = train_lengths
 
+     # Make full dataset pipeline run on CPU (including prefetching).
+    with tf.device('/cpu:0'):
       if algorithm in ['naive_string_matcher', 'kmp_matcher']:
         # Fixed haystack + needle; variability will be in needle
         # Still, for chunked training, we maintain as many samplers
         # as train lengths, since, for each length there is a separate state,
         # and we must keep the 1:1 relationship between states and samplers.
-        max_length = max(train_lengths)
+        max_length = max(current_algo_train_lengths)
         if max_length > 0:  # if < 0, we are using the benchmark data
           max_length = (max_length * 5) // 4
-        train_lengths = [max_length]
+        current_algo_train_lengths = [max_length]
         if FLAGS.chunked_training:
-          train_lengths = train_lengths * len(train_lengths)
+          current_algo_train_lengths = current_algo_train_lengths * len(
+              current_algo_train_lengths
+          )
 
       logging.info('Creating samplers for algo %s', algorithm)
 
@@ -351,37 +365,43 @@ def create_samplers(rng, train_lengths: List[int]):
         sampler_kwargs.pop('length_needle')
 
       common_sampler_args = dict(
-          algorithm=FLAGS.algorithms[algo_idx],
+          algorithm=algorithms[algo_idx],
           rng=rng,
           enforce_pred_as_input=FLAGS.enforce_pred_as_input,
           enforce_permutations=FLAGS.enforce_permutations,
           chunk_length=FLAGS.chunk_length,
           )
 
-      train_args = dict(sizes=train_lengths,
-                        split='train',
-                        batch_size=FLAGS.batch_size,
-                        multiplier=-1, # on-the-fly, unlimited samples
-                        randomize_pos=FLAGS.random_pos,
-                        chunked=FLAGS.chunked_training,
-                        sampler_kwargs=sampler_kwargs,
-                        **common_sampler_args)
-      train_sampler, _, spec = make_multi_sampler(**train_args)
+      train_args = dict(
+          sizes=current_algo_train_lengths,
+          split='train',
+          batch_size=train_batch_size,
+          multiplier=-1,
+          randomize_pos=FLAGS.random_pos,
+          chunked=FLAGS.chunked_training,
+          sampler_kwargs=sampler_kwargs,
+          **common_sampler_args,
+      )
+      train_sampler, _, _ = make_multi_sampler(**train_args)
 
-      mult = clrs.CLRS_30_ALGS_SETTINGS[algorithm]['num_samples_multiplier']
-      val_args = dict(sizes=[np.amax(train_lengths)],
-                      split='val',
-                      batch_size=32,
-                      multiplier=2 * mult,
-                      randomize_pos=FLAGS.random_pos,
-                      chunked=False,
-                      sampler_kwargs=sampler_kwargs,
-                      **common_sampler_args)
-      val_sampler, val_samples, spec = make_multi_sampler(**val_args)
+      algo_settings = clrs.CLRS_30_ALGS_SETTINGS.get(
+          algorithm, {'num_samples_multiplier': 1})
+      mult = algo_settings['num_samples_multiplier']
+      val_args = dict(
+          sizes=val_lengths or [np.amax(current_algo_train_lengths)],
+          split='val',
+          batch_size=val_batch_size,
+          multiplier=2 * mult,
+          randomize_pos=FLAGS.random_pos,
+          chunked=False,
+          sampler_kwargs=sampler_kwargs,
+          **common_sampler_args,
+      )
+      val_sampler, val_samples, _ = make_multi_sampler(**val_args)
 
-      test_args = dict(sizes=[FLAGS.test_length], #TODO vary, old code: sizes=[-1], #Fixme! test with small size for poc
+      test_args = dict(sizes=test_lengths or [-1],
                        split='test',
-                       batch_size=32,
+                       batch_size=test_batch_size,
                        multiplier=2 * mult,
                        randomize_pos=False,
                        chunked=False,
@@ -415,30 +435,33 @@ def main(unused_argv):
   else:
     raise ValueError('Hint mode not in {encoded_decoded, decoded_only, none}.')
 
-  if FLAGS.results_df:
-      RESULTS = {} # for a model, save best_val_error, test_error, and train time
-      PRE_DF_RESULTS = ([['Train KlDiv', 'Mean 1-abs(error)', 'Num Steps',
-                                         'Examples Seen']])
-
-
   train_lengths = [int(x) for x in FLAGS.train_lengths]
 
   rng = np.random.RandomState(FLAGS.seed)
   rng_key = jax.random.PRNGKey(rng.randint(2**32))
 
- # print('calling create samplers')
   # Create samplers
-  (train_samplers,
-   val_samplers, val_sample_counts,
-   test_samplers, test_sample_counts,
-   spec_list) = create_samplers(rng, train_lengths)
- # print('run.py made samplers')
+  (
+      train_samplers,
+      val_samplers,
+      val_sample_counts,
+      test_samplers,
+      test_sample_counts,
+      spec_list,
+  ) = create_samplers(
+      rng=rng,
+      train_lengths=train_lengths,
+      algorithms=FLAGS.algorithms,
+      val_lengths=[np.amax(train_lengths)],
+      test_lengths=[-1],
+      train_batch_size=FLAGS.batch_size,
+  )
 
   processor_factory = clrs.get_processor_factory(
       FLAGS.processor_type,
       use_ln=FLAGS.use_ln,
       nb_triplet_fts=FLAGS.nb_triplet_fts,
-      nb_heads=FLAGS.nb_heads
+      nb_heads=FLAGS.nb_heads,
   )
   model_params = dict(
       processor_factory=processor_factory,
@@ -456,7 +479,7 @@ def main(unused_argv):
       hint_repred_mode=FLAGS.hint_repred_mode,
       nb_msg_passing_steps=FLAGS.nb_msg_passing_steps,
       )
-  print('run.py model params', model_params)
+
   eval_model = clrs.models.BaselineModel(
       spec=spec_list,
       dummy_trajectory=[next(t) for t in val_samplers],
@@ -471,11 +494,6 @@ def main(unused_argv):
   else:
     train_model = eval_model
 
-  #exit(0)
-
- # print('run.py starting training')
-
-  train_start_time = time.time()
   # Training loop.
   best_score = -1.0
   current_train_items = [0] * len(FLAGS.algorithms)
@@ -485,13 +503,9 @@ def main(unused_argv):
   # until all algos have had at least one evaluation.
   val_scores = [-99999.9] * len(FLAGS.algorithms)
   length_idx = 0
-  TEMP = []
 
   while step < FLAGS.train_steps:
     feedback_list = [next(t) for t in train_samplers]
-    # check after feedback list what we get is ground-truth probabilities
-   # print('run.py, feedback_list[0]', feedback_list[0])
-    #breakpoint()
 
     # Initialize model.
     if step == 0:
@@ -507,7 +521,6 @@ def main(unused_argv):
       else:
         train_model.init(all_features, FLAGS.seed + 1)
 
-   # print('run.py model initialized')
     # Training step.
     for algo_idx in range(len(train_samplers)):
       feedback = feedback_list[algo_idx]
@@ -523,16 +536,14 @@ def main(unused_argv):
       cur_loss = train_model.feedback(rng_key, feedback, length_and_algo_idx)
       rng_key = new_rng_key
 
-      TEMP.append(cur_loss)
-
       if FLAGS.chunked_training:
         examples_in_chunk = np.sum(feedback.features.is_last).item()
       else:
         examples_in_chunk = len(feedback.features.lengths)
       current_train_items[algo_idx] += examples_in_chunk
       logging.info('Algo %s step %i current loss %f, current_train_items %i.',
-                  FLAGS.algorithms[algo_idx], step,
-                  cur_loss, current_train_items[algo_idx])
+                   FLAGS.algorithms[algo_idx], step,
+                   cur_loss, current_train_items[algo_idx])
 
     # Periodically evaluate model
     if step >= next_eval:
@@ -541,29 +552,26 @@ def main(unused_argv):
         common_extras = {'examples_seen': current_train_items[algo_idx],
                          'step': step,
                          'algorithm': FLAGS.algorithms[algo_idx]}
-        #breakpoint()
-
 
         # Validation info.
         new_rng_key, rng_key = jax.random.split(rng_key)
-        val_stats = collect_and_eval(
-            val_samplers[algo_idx],
-            functools.partial(eval_model.predict, algorithm_index=algo_idx),
-            val_sample_counts[algo_idx],
-            new_rng_key,
-            extras=common_extras)
-        #logging.info('(val) algo %s step %d: %s',FLAGS.algorithms[algo_idx], step, val_stats)
+        val_stats = multisol_dispatch.evaluate_with_registry(
+            algorithm_name=FLAGS.algorithms[algo_idx],
+            split='val',
+            profile=FLAGS.evaluation_profile,
+            sampler=val_samplers[algo_idx],
+            predict_fn=functools.partial(
+                eval_model.predict, algorithm_index=algo_idx),
+            sample_count=val_sample_counts[algo_idx],
+            rng_key=new_rng_key,
+            extras=common_extras,
+            artifact_prefix=FLAGS.sampling_artifact_prefix,
+            save_artifacts=False,
+            fallback_eval_fn=collect_and_eval,
+        )
+        logging.info('(val) algo %s step %d: %s',
+                     FLAGS.algorithms[algo_idx], step, val_stats)
         val_scores[algo_idx] = val_stats['score']
-
-        if FLAGS.results_df:
-            # train_loss:= cur_loss, val_score := sum(val_scores), test_score is not-yet calculable
-            # epoch is num_train_steps?
-            this_result = [np.mean(TEMP), sum(val_scores), step, current_train_items[algo_idx]]
-            #{'Train KlDiv': cur_loss, 'Val MAE': sum(val_scores), 'Num Steps': step,
-            #                            'Examples Seen': current_train_items[algo_idx]}])
-            PRE_DF_RESULTS.append(this_result)
-            TEMP = []
-            #breakpoint()
 
       next_eval += FLAGS.eval_every
 
@@ -581,58 +589,34 @@ def main(unused_argv):
         train_model.save_model('best.pkl')
       else:
         logging.info('Not saving new best model, %s', msg)
-        pass
 
     step += 1
     length_idx = (length_idx + 1) % len(train_lengths)
 
-  train_end_time = time.time()
-  train_time = train_end_time-train_start_time # timing includes occasional validation and checkpointing
-  print('train time (seconds)', train_time)
   logging.info('Restoring best model from checkpoint...')
   eval_model.restore_model('best.pkl', only_load_processor=False)
-  model_unpickle_time = time.time()
-  print('model restoring time (seconds)', model_unpickle_time-train_end_time)
 
- # print('run.py doing logging?')
   for algo_idx in range(len(train_samplers)):
     common_extras = {'examples_seen': current_train_items[algo_idx],
                      'step': step,
                      'algorithm': FLAGS.algorithms[algo_idx]}
 
     new_rng_key, rng_key = jax.random.split(rng_key)
-    #breakpoint()
-    algorithm_name = FLAGS.algorithms[algo_idx]
-    if algorithm_name in MULTISOL_EVAL_HANDLERS:
-        test_stats = MULTISOL_EVAL_HANDLERS[algorithm_name](
-            test_samplers[algo_idx],
-            functools.partial(eval_model.predict, algorithm_index=algo_idx),
-            test_sample_counts[algo_idx],
-            new_rng_key,
-            extras=common_extras,
-            filename=FLAGS.filename,
-            vd_flag=FLAGS.validate_distributions,
-            NSE=FLAGS.NSE)
-    else:
-        test_stats = collect_and_eval(
-            test_samplers[algo_idx],
-            functools.partial(eval_model.predict, algorithm_index=algo_idx),
-            test_sample_counts[algo_idx],
-            new_rng_key,
-            extras=common_extras)
+    test_stats = multisol_dispatch.evaluate_with_registry(
+        algorithm_name=FLAGS.algorithms[algo_idx],
+        split='test',
+        profile=FLAGS.evaluation_profile,
+        sampler=test_samplers[algo_idx],
+        predict_fn=functools.partial(eval_model.predict, algorithm_index=algo_idx),
+        sample_count=test_sample_counts[algo_idx],
+        rng_key=new_rng_key,
+        extras=common_extras,
+        artifact_prefix=FLAGS.sampling_artifact_prefix,
+        save_artifacts=FLAGS.save_sampling_artifacts,
+        fallback_eval_fn=collect_and_eval,
+    )
     logging.info('(test) algo %s : %s', FLAGS.algorithms[algo_idx], test_stats)
 
-  if FLAGS.results_df:
-      RESULTS['run0'] = (train_time, best_score) # best_score given by highest val score, which is MAE by EVAL_FN
-      DF_RESULTS = pd.DataFrame(PRE_DF_RESULTS)
-      if FLAGS.save_df:
-          DF_RESULTS.to_csv(f'score-results-{FLAGS.filename}.csv', encoding='utf-8', index=False)
-
-  if FLAGS.save_model_to_file: #saving full model. Remember to call loadel_model.eval() on loaded model if you want to do inference
-      ## doesnt worKtorch.save(eval_model.state_dict(), 'best_model_state_dict.pth') # saves eval_model to PATH='best_model.pth'
-      eval_model.save_model_to_permanent_file(f'eval_model_pickle-{FLAGS.filename}.pkl')
-      ## load with filepointer! look at baselines.py restore_model for example
-  #breakpoint()
   logging.info('Done!')
 
 

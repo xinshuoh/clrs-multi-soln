@@ -6,6 +6,8 @@ import clrs
 import jax
 
 from clrs._src.multi_sol.data.adapters import concat_tree
+from clrs._src.multi_sol.evaluation import distribution_validation
+from clrs._src.multi_sol.evaluation import reporting
 from clrs._src.multi_sol.evaluation import reports
 from clrs._src.multi_sol.evaluation.runners import evaluate_sampling_pair
 from clrs._src.multi_sol.sampling import dfs as dfs_sampling
@@ -19,12 +21,14 @@ def evaluate_dfs_multisol_batch(
     sample_count,
     rng_key,
     extras,
-    save_results_fn,
+    save_results_fn=None,
     filename="dfs_accuracy",
+    vd_flag=False,
+    NSE=100,
 ) -> Dict[str, float]:
   """Collect, evaluate, sample, validate and save DFS multi-solution results."""
   processed_samples = 0
-  preds = []
+  pred_batches = []
   outputs = []
   adjacency_batches = []
 
@@ -34,13 +38,20 @@ def evaluate_dfs_multisol_batch(
     outputs.append(feedback.outputs)
     new_rng_key, rng_key = jax.random.split(rng_key)
     cur_preds, _ = predict_fn(new_rng_key, feedback.features)
-    preds.append(cur_preds)
+    pred_batches.append(cur_preds)
     processed_samples += batch_size
     adjacency_batches.append(feedback[0][0][1].data)
 
   outputs = concat_tree(outputs, axis=0)
   adjacency = concat_tree(adjacency_batches, axis=0)
-  preds = concat_tree(preds, axis=0)
+  preds = concat_tree(pred_batches, axis=0)
+  if vd_flag:
+    distribution_validation.run_dfs_distribution_validation(
+        adjacency=adjacency,
+        outputs=outputs,
+        pred_batches=pred_batches,
+        nse=NSE,
+    )
   source_nodes = [0] * len(adjacency)
   out = clrs.evaluate(outputs, preds)
 
@@ -112,7 +123,8 @@ def evaluate_dfs_multisol_batch(
       "altUpwards_True_Valids_Uniques": true_alt_valids_uniques,
       "altUpwards_True_Valids": true_alt_valids,
   })
-  save_results_fn(result_dict, f"{filename}_DFS")
+  report_sink = save_results_fn or reporting.discard_report
+  report_sink(result_dict, f"{filename}_DFS")
 
   if extras:
     out.update(extras)
