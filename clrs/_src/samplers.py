@@ -24,6 +24,7 @@ from typing import Any, Callable, List, Optional, Tuple
 from absl import logging
 
 from clrs._src import algorithms
+from clrs._src.multi_sol.data import samplers as multisol_samplers
 from clrs._src import probing
 from clrs._src import specs
 import jax
@@ -430,14 +431,7 @@ class DfsMultiSampler(Sampler):
       length: int, 
       p: Tuple[float, ...] = (0.5,),
     ):
-      graph = self._random_er_graph(
-          nb_nodes=length, p=self._rng.choice(p),
-          directed=True, acyclic=False, weighted=False)
-      
-      # Add deterministic seed for algorithm
-      sub_seed = self._rng.randint(0, 2**31)
-      
-      return [graph, sub_seed]  # ← Extra parameter
+      return multisol_samplers.sample_data_dfs_multi(self, length=length, p=p)
 
 
 class BfsSampler(Sampler):
@@ -463,15 +457,7 @@ class BfsMultiSampler(Sampler):
       length: int,
       p: Tuple[float, ...] = (0.5,),
   ):
-    graph = self._random_er_graph(
-        nb_nodes=length, p=self._rng.choice(p),
-        directed=False, acyclic=False, weighted=False)
-    source_node = self._rng.choice(length)
-    
-    # Add deterministic seed for algorithm
-    sub_seed = self._rng.randint(0, 2**31)
-    
-    return [graph, source_node, sub_seed]  # Extra parameter for multi-solution
+    return multisol_samplers.sample_data_bfs_multi(self, length=length, p=p)
 
 
 class TopoSampler(Sampler):
@@ -544,6 +530,20 @@ class BellmanFordSampler(Sampler):
     source_node = self._rng.choice(length)
     #breakpoint()
     return [graph, source_node]
+
+
+class BellmanFordMultiSampler(Sampler):
+  """Bellman-Ford sampler with per-instance seed for multi-solution labels."""
+
+  def _sample_data(
+      self,
+      length: int,
+      p: Tuple[float, ...] = (0.5,),
+      low: int = 1,
+      high: int = 3,
+  ):
+    return multisol_samplers.sample_data_bellman_ford_multi(
+        self, length=length, p=p, low=low, high=high)
 
 
 class DAGPathSampler(Sampler):
@@ -717,7 +717,7 @@ SAMPLERS = {
     'mst_kruskal': MSTSampler,
     'mst_prim': BellmanFordSampler,
     'bellman_ford': BellmanFordSampler,
-    'bellman_ford_multi': BellmanFordSampler,
+    'bellman_ford_multi': BellmanFordMultiSampler,
     'dag_shortest_paths': DAGPathSampler,
     'dijkstra': BellmanFordSampler,
     'floyd_warshall': FloydWarshallSampler,

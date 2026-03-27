@@ -7,11 +7,13 @@ import clrs     # for clrs.evaluate
 import jax
 import pandas as pd
 
-import clrs._src.dfs_sampling as dfs_sampling
+from clrs._src.multi_sol.sampling import dfs as dfs_sampling
+from clrs._src.multi_sol.sampling import bellman_ford as bf_sampling
 from clrs._src.multi_sol.algorithms.bfs.plugin import evaluate_bfs_multisol_batch
+from clrs._src.multi_sol.algorithms.dfs.plugin import evaluate_dfs_multisol_batch
+from clrs._src.multi_sol.algorithms.bellman_ford.plugin import evaluate_bf_multisol_batch
 from clrs._src import dfs_uniqueness_check
 from clrs._src.algorithms import check_graphs, dfs_verification_tester
-from clrs._src.algorithms.BF_beamsearch import sample_beamsearch, sample_greedysearch
 from clrs._src.bf_uniqueness_check import check_uniqueness_bf
 from clrs._src.multi_sol.data.distribution_generation import (
     build_bf_validation_payload,
@@ -60,6 +62,16 @@ def unpack(v):
 
 def BF_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, filename='bf_accuracy', vd_flag=True, NSE = 100):
     """Collect batches of output and hint preds and evaluate them."""
+    if not vd_flag:
+        return evaluate_bf_multisol_batch(
+            sampler=sampler,
+            predict_fn=predict_fn,
+            sample_count=sample_count,
+            rng_key=rng_key,
+            extras=extras,
+            save_results_fn=save_results,
+            filename=filename,
+        )
     processed_samples = 0
     preds = []
     outputs = []
@@ -122,8 +134,8 @@ def BF_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, file
     ########
     # BEAM #
     ########
-    model_sample_beam = sample_beamsearch(As, source_nodes, [preds])
-    true_sample_beam = sample_beamsearch(As, source_nodes, outputs)
+    model_sample_beam = bf_sampling.sample_beamsearch(As, source_nodes, [preds])
+    true_sample_beam = bf_sampling.sample_beamsearch(As, source_nodes, outputs)
 
     model_beam_truthmask = [check_graphs.check_valid_BFpaths(As[i], source_nodes[i], model_sample_beam[i]) for i in range(len(model_sample_beam))]
     correctness_model_beam = sum(model_beam_truthmask) / len(model_beam_truthmask)
@@ -155,8 +167,8 @@ def BF_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, file
     ########
     # greedy beam #
     ########
-    model_sample_greedy = sample_greedysearch(As, source_nodes, [preds])
-    true_sample_greedy = sample_greedysearch(As, source_nodes, outputs)
+    model_sample_greedy = bf_sampling.sample_greedysearch(As, source_nodes, [preds])
+    true_sample_greedy = bf_sampling.sample_greedysearch(As, source_nodes, outputs)
 
     model_greedy_truthmask = [check_graphs.check_valid_BFpaths(As[i], source_nodes[i], model_sample_greedy[i]) for i in
                             range(len(model_sample_greedy))]
@@ -267,6 +279,16 @@ def BFS_multi_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extra
 
 def DFS_collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras, filename = 'dfs_accuracy', vd_flag=False, NSE = 100):
     """Collect batch of output preds and evaluate them."""
+    if not vd_flag:
+        return evaluate_dfs_multisol_batch(
+            sampler=sampler,
+            predict_fn=predict_fn,
+            sample_count=sample_count,
+            rng_key=rng_key,
+            extras=extras,
+            save_results_fn=save_results,
+            filename=filename,
+        )
     processed_samples = 0
     preds = []
     outputs = []

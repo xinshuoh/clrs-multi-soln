@@ -7,11 +7,12 @@ import clrs
 import jax
 import numpy as np
 
-from clrs._src import dfs_sampling
 from clrs._src.multi_sol.data.adapters import concat_tree
+from clrs._src.multi_sol.data.adapters import extract_bfs_graph_and_source
 from clrs._src.multi_sol.evaluation import reports
 from clrs._src.multi_sol.evaluation.runners import evaluate_sampling_pair
 from clrs._src.multi_sol.sampling import bfs as bfs_sampling
+from clrs._src.multi_sol.sampling import dfs as dfs_sampling
 from clrs._src.multi_sol.validation import bfs as bfs_validation
 
 
@@ -39,12 +40,13 @@ def evaluate_bfs_multisol_batch(
     cur_preds, _ = predict_fn(new_rng_key, feedback.features)
     preds.append(cur_preds)
     processed_samples += batch_size
-    adjacency_batches.append(feedback[0][0][2].data)
-    source_batches.append(np.argmax(feedback[0][0][1].data, axis=1))
+    adjacency, source = extract_bfs_graph_and_source(feedback)
+    adjacency_batches.append(adjacency)
+    source_batches.append(source)
 
   outputs = concat_tree(outputs, axis=0)
   adjacency = concat_tree(adjacency_batches, axis=0)
-  source_nodes = concat_tree(source_batches, axis=0)
+  source_nodes = concat_tree(source_batches, axis=0).astype(int)
   preds = concat_tree(preds, axis=0)
   out = clrs.evaluate(outputs, preds)
 
@@ -109,4 +111,3 @@ def _unpack(v):
     return v.item()
   except (AttributeError, ValueError):
     return v
-

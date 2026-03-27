@@ -54,6 +54,9 @@ class BfsCollectAndEvalWrapperTest(unittest.TestCase):
     self._install_package("clrs._src.multi_sol.algorithms")
     self._install_package("clrs._src.multi_sol.algorithms.bfs")
     self._install_package("clrs._src.multi_sol.data")
+    self._install_package("clrs._src.multi_sol.sampling")
+    self._install_package("clrs._src.multi_sol.algorithms.dfs")
+    self._install_package("clrs._src.multi_sol.algorithms.bellman_ford")
 
     pandas_module = types.ModuleType("pandas")
     pandas_module.set_option = lambda *args, **kwargs: None
@@ -68,6 +71,20 @@ class BfsCollectAndEvalWrapperTest(unittest.TestCase):
                          types.ModuleType("clrs._src.dfs_sampling"))
     self._install_module("clrs._src.dfs_uniqueness_check",
                          types.ModuleType("clrs._src.dfs_uniqueness_check"))
+    dfs_sampling_module = types.ModuleType("clrs._src.multi_sol.sampling.dfs")
+    dfs_sampling_module.sample_random_list = lambda data: []
+    dfs_sampling_module.sample_argmax = lambda data: []
+    dfs_sampling_module.sample_argmax_listofdict = lambda data: []
+    dfs_sampling_module.sample_argmax_listofdatapoint = lambda data: []
+    dfs_sampling_module.sample_upwards = lambda data: []
+    dfs_sampling_module.sample_altUpwards = lambda data: []
+    self._install_module("clrs._src.multi_sol.sampling.dfs", dfs_sampling_module)
+
+    bf_sampling_module = types.ModuleType("clrs._src.multi_sol.sampling.bellman_ford")
+    bf_sampling_module.sample_beamsearch = lambda *args, **kwargs: []
+    bf_sampling_module.sample_greedysearch = lambda *args, **kwargs: []
+    self._install_module("clrs._src.multi_sol.sampling.bellman_ford",
+                         bf_sampling_module)
 
     check_graphs_module = types.ModuleType("clrs._src.algorithms.check_graphs")
     dfs_verify_module = types.ModuleType(
@@ -110,6 +127,14 @@ class BfsCollectAndEvalWrapperTest(unittest.TestCase):
     plugin_module = types.ModuleType("clrs._src.multi_sol.algorithms.bfs.plugin")
     plugin_module.evaluate_bfs_multisol_batch = plugin_fn
     self._install_module("clrs._src.multi_sol.algorithms.bfs.plugin", plugin_module)
+    dfs_plugin_module = types.ModuleType("clrs._src.multi_sol.algorithms.dfs.plugin")
+    dfs_plugin_module.evaluate_dfs_multisol_batch = lambda **kwargs: {"delegated_dfs": 1.0}
+    self._install_module("clrs._src.multi_sol.algorithms.dfs.plugin", dfs_plugin_module)
+    bf_plugin_module = types.ModuleType(
+        "clrs._src.multi_sol.algorithms.bellman_ford.plugin")
+    bf_plugin_module.evaluate_bf_multisol_batch = lambda **kwargs: {"delegated_bf": 1.0}
+    self._install_module("clrs._src.multi_sol.algorithms.bellman_ford.plugin",
+                         bf_plugin_module)
 
     module_path = self._repo_root / "clrs" / "examples" / "log_experiments.py"
     spec = importlib.util.spec_from_file_location("clrs.examples.log_experiments",

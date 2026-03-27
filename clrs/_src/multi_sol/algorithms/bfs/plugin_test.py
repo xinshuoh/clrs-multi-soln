@@ -139,6 +139,9 @@ class EvaluateBfsPluginTest(unittest.TestCase):
 
     adapters_module = types.ModuleType("clrs._src.multi_sol.data.adapters")
     adapters_module.concat_tree = _stub_concat_tree
+    adapters_module.extract_bfs_graph_and_source = (
+        lambda feedback: (feedback.features.inputs[2].data,
+                          np.argmax(feedback.features.inputs[1].data, axis=1)))
     self._install_module("clrs._src.multi_sol.data.adapters", adapters_module)
 
     metrics_path = (
@@ -164,6 +167,9 @@ class EvaluateBfsPluginTest(unittest.TestCase):
             outs_or_preds, source_nodes)
     )
     self._install_module("clrs._src.multi_sol.sampling.bfs", bfs_sampling_module)
+    dfs_sampling_module_2 = types.ModuleType("clrs._src.multi_sol.sampling.dfs")
+    dfs_sampling_module_2.sample_random_list = _stub_random_trees
+    self._install_module("clrs._src.multi_sol.sampling.dfs", dfs_sampling_module_2)
 
     bfs_validation_module = types.ModuleType("clrs._src.multi_sol.validation.bfs")
     bfs_validation_module.check_valid_bfs_tree = (

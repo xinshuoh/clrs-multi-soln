@@ -51,6 +51,12 @@ from clrs import _src
 from clrs._src.algorithms import check_graphs
 import clrs._src.dfs_sampling
 
+MULTISOL_EVAL_HANDLERS = {
+    "dfs_multi": DFS_collect_and_eval,
+    "bellman_ford_multi": BF_collect_and_eval,
+    "bfs_multi": BFS_multi_collect_and_eval,
+}
+
 flags.DEFINE_list('algorithms', ['dfs'], 'Which algorithms to run.')
 flags.DEFINE_list('train_lengths', ['4', '7', '11', '13', '16'],
                   'Which training sizes to use. A size of -1 means '
@@ -596,27 +602,17 @@ def main(unused_argv):
 
     new_rng_key, rng_key = jax.random.split(rng_key)
     #breakpoint()
-    if FLAGS.algorithms[algo_idx] == "dfs_multi":
-        test_stats = DFS_collect_and_eval(
-            test_samplers[algo_idx],
-            functools.partial(eval_model.predict, algorithm_index=algo_idx),
-            5,#test_sample_counts[algo_idx],
-            new_rng_key,
-            extras=common_extras, filename=FLAGS.filename, vd_flag=FLAGS.validate_distributions, NSE = FLAGS.NSE)
-    elif FLAGS.algorithms[algo_idx] == 'bellman_ford_multi':
-        test_stats = BF_collect_and_eval(
+    algorithm_name = FLAGS.algorithms[algo_idx]
+    if algorithm_name in MULTISOL_EVAL_HANDLERS:
+        test_stats = MULTISOL_EVAL_HANDLERS[algorithm_name](
             test_samplers[algo_idx],
             functools.partial(eval_model.predict, algorithm_index=algo_idx),
             test_sample_counts[algo_idx],
             new_rng_key,
-            extras=common_extras, filename=FLAGS.filename, vd_flag=FLAGS.validate_distributions, NSE = FLAGS.NSE)
-    elif FLAGS.algorithms[algo_idx] == 'bfs_multi':
-        test_stats = BFS_multi_collect_and_eval(
-            test_samplers[algo_idx],
-            functools.partial(eval_model.predict, algorithm_index=algo_idx),
-            test_sample_counts[algo_idx],
-            new_rng_key,
-            extras=common_extras, filename=FLAGS.filename, vd_flag=FLAGS.validate_distributions, NSE=FLAGS.NSE)
+            extras=common_extras,
+            filename=FLAGS.filename,
+            vd_flag=FLAGS.validate_distributions,
+            NSE=FLAGS.NSE)
     else:
         test_stats = collect_and_eval(
             test_samplers[algo_idx],

@@ -39,10 +39,12 @@ See "Introduction to Algorithms" 3ed (CLRS3) for more information.
 from typing import Tuple
 
 import chex
+from clrs._src.multi_sol.algorithms.multi_graphs import bellman_ford_multi as _multisol_bellman_ford_multi
+from clrs._src.multi_sol.algorithms.multi_graphs import bfs_multi as _multisol_bfs_multi
+from clrs._src.multi_sol.algorithms.multi_graphs import dfs_multi as _multisol_dfs_multi
 from clrs._src import probing
 from clrs._src import specs
 import numpy as np
-import scipy as sp
 
 
 _Array = np.ndarray
@@ -176,161 +178,7 @@ def dfs(A: _Array) -> _Out:
 
 def dfs_multi(A: _Array, seed: int, deterministic = False) -> _Out:
   """Multiple solution depth-first search (Moore, 1959)."""
-  rng = np.random.RandomState(seed)
-
-  chex.assert_rank(A, 2)
-  probeslist = []
-  pies = []
-
-  NUM_SOLUTIONS = 20
-
-  if deterministic:
-      NUM_SOLUTIONS = 1
-
-  for i in range(NUM_SOLUTIONS):
-
-      probes = probing.initialize(specs.SPECS['dfs_multi'])
-
-      A_pos = np.arange(A.shape[0])
-
-      probing.push(
-          probes,
-          specs.Stage.INPUT,
-          next_probe={
-              'pos': np.copy(A_pos) * 1.0 / A.shape[0],
-              'A': np.copy(A),
-              'adj': probing.graph(np.copy(A))
-          })
-
-      color = np.zeros(A.shape[0], dtype=np.int32)
-      pi = np.arange(A.shape[0])
-      d = np.zeros(A.shape[0])
-      f = np.zeros(A.shape[0])
-      s_prev = np.arange(A.shape[0])
-      time = 0
-
-      # DFS with randomised neighbour order
-      shuffled = np.arange(A.shape[0])
-      rng.shuffle(shuffled)
-      for s in range(A.shape[0]):
-        if color[s] == 0:
-          s_last = s
-          u = s
-          v = s
-          probing.push(
-              probes,
-              specs.Stage.HINT,
-              next_probe={
-                  'pi_h': np.copy(pi),
-                  'color': probing.array_cat(color, 3),
-                  'd': np.copy(d),
-                  'f': np.copy(f),
-                  's_prev': np.copy(s_prev),
-                  's': probing.mask_one(s, A.shape[0]),
-                  'u': probing.mask_one(u, A.shape[0]),
-                  'v': probing.mask_one(v, A.shape[0]),
-                  's_last': probing.mask_one(s_last, A.shape[0]),
-                  'time': time
-              })
-          while True:
-            if color[u] == 0 or d[u] == 0.0:
-              time += 0.01
-              d[u] = time
-              color[u] = 1
-              probing.push(
-                  probes,
-                  specs.Stage.HINT,
-                  next_probe={
-                      'pi_h': np.copy(pi),
-                      'color': probing.array_cat(color, 3),
-                      'd': np.copy(d),
-                      'f': np.copy(f),
-                      's_prev': np.copy(s_prev),
-                      's': probing.mask_one(s, A.shape[0]),
-                      'u': probing.mask_one(u, A.shape[0]),
-                      'v': probing.mask_one(v, A.shape[0]),
-                      's_last': probing.mask_one(s_last, A.shape[0]),
-                      'time': time
-                  })
-
-            for v in shuffled:  # Visit neighbours in random order
-              if A[u, v] != 0:
-                if color[v] == 0:
-                  pi[v] = u  # Set parent
-                  color[v] = 1
-                  s_prev[v] = s_last
-                  s_last = v
-
-                  probing.push(
-                      probes,
-                      specs.Stage.HINT,
-                      next_probe={
-                          'pi_h': np.copy(pi),
-                          'color': probing.array_cat(color, 3),
-                          'd': np.copy(d),
-                          'f': np.copy(f),
-                          's_prev': np.copy(s_prev),
-                          's': probing.mask_one(s, A.shape[0]),
-                          'u': probing.mask_one(u, A.shape[0]),
-                          'v': probing.mask_one(v, A.shape[0]),
-                          's_last': probing.mask_one(s_last, A.shape[0]),
-                          'time': time
-                      })
-                  break
-
-            if s_last == u:
-              color[u] = 2
-              time += 0.01
-              f[u] = time
-
-              probing.push(
-                  probes,
-                  specs.Stage.HINT,
-                  next_probe={
-                      'pi_h': np.copy(pi),
-                      'color': probing.array_cat(color, 3),
-                      'd': np.copy(d),
-                      'f': np.copy(f),
-                      's_prev': np.copy(s_prev),
-                      's': probing.mask_one(s, A.shape[0]),
-                      'u': probing.mask_one(u, A.shape[0]),
-                      'v': probing.mask_one(v, A.shape[0]),
-                      's_last': probing.mask_one(s_last, A.shape[0]),
-                      'time': time
-                  })
-
-              if s_prev[u] == u:
-                assert s_prev[s_last] == s_last
-                break
-              pr = s_prev[s_last]
-              s_prev[s_last] = s_last
-              s_last = pr
-
-            u = s_last
-
-      probing.push(probes, specs.Stage.OUTPUT, next_probe={'pi': np.copy(pi)})
-      probing.finalize(probes)
-
-      pies.append(pi)
-      probeslist.append(probes)
-      # only take the time hint, to figure out trajectory length
-      # run code in no-hint mode
-      # for every probing.push, +1 iteration of the GNN
-
-
-  adjs = []
-  for i in range(NUM_SOLUTIONS):
-    adj = np.zeros(A.shape)
-    for j in range(len(pies[0])):
-        adj[j, pies[i][j]] = 1  # Mark parent of node j in solution i
-    adjs.append(adj)
-  parent_dist = sum(adjs) / NUM_SOLUTIONS
-  #parent_dist = sp.special.logit(parent_dist)
-  #print(probes)
-  #print(parent_dist)
-  probeslist[0]['output']['node']['pi']['data'] = parent_dist
-  #breakpoint()
-  return parent_dist, probeslist[0]
+  return _multisol_dfs_multi(A=A, seed=seed, deterministic=deterministic)
 
 
   #return pi, probes
@@ -384,88 +232,7 @@ def bfs(A: _Array, s: int) -> _Out:
 
 def bfs_multi(A: _Array, s: int, seed: int, deterministic=False) -> _Out:
   """Multiple solution breadth-first search."""
-  rng = np.random.RandomState(seed)
-
-  chex.assert_rank(A, 2)
-  probeslist = []
-  pies = []
-
-  if deterministic:
-    NUM_SOLUTIONS = 1
-  else: 
-    NUM_SOLUTIONS = 20
-
-  for i in range(NUM_SOLUTIONS):
-    probes = probing.initialize(specs.SPECS['bfs_multi'])
-
-    A_pos = np.arange(A.shape[0])
-
-    probing.push(
-        probes,
-        specs.Stage.INPUT,
-        next_probe={
-            'pos': np.copy(A_pos) * 1.0 / A.shape[0],
-            's': probing.mask_one(s, A.shape[0]),
-            'A': np.copy(A),
-            'adj': probing.graph(np.copy(A))
-        })
-
-    reach = np.zeros(A.shape[0])
-    pi = np.arange(A.shape[0])
-    reach[s] = 1
-    while True:
-      prev_reach = np.copy(reach)
-      probing.push(
-          probes,
-          specs.Stage.HINT,
-          next_probe={
-              'reach_h': np.copy(prev_reach),
-              'pi_h': np.copy(pi)
-          })
-      
-      # Randomise order of sources (reached nodes) to generate different valid BFS trees
-      # All nodes in prev_reach are at the same distance from root, so any can be a valid parent
-      # Shuffling determines which one "claims" a child first when multiple are valid
-      n = A.shape[0]
-      sources = np.where(prev_reach == 1)[0]
-      if deterministic:
-        shuffled_sources = sources
-      else:
-        shuffled_sources = np.copy(sources)
-        rng.shuffle(shuffled_sources)
-      for src in shuffled_sources:
-        for j in range(n):
-          if A[src, j] > 0:
-            if pi[j] == j and j != s:
-              pi[j] = src
-            reach[j] = 1
-      if np.all(reach == prev_reach):
-        break
-
-    probing.push(probes, specs.Stage.OUTPUT, next_probe={'pi': np.copy(pi)})
-    probing.finalize(probes)
-
-    pies.append(pi)
-    probeslist.append(probes)
-
-  ### copied from DFS CODE
-  # build adj matrix of "is i a parent of j in any pi", sums and divides.
-  adjs = []
-  for i in range(NUM_SOLUTIONS):
-      adj = np.zeros(A.shape)
-      for j in range(len(pies[0])):  # what's the parent of j?
-          #breakpoint()
-          adj[j, pies[i][j]] = 1  # at row j, put 1 in the column corresponding to parent
-      adjs.append(adj)
-  parent_dist = sum(adjs) / NUM_SOLUTIONS
-  # parent_dist = sp.special.logit(parent_dist)
-  # print(probes)
-  # print(parent_dist)
-  probeslist[0]['output']['node']['pi']['data'] = parent_dist
-
-  #breakpoint()
-  ## CHECK THE PUSHING!
-  return parent_dist, probeslist[0]
+  return _multisol_bfs_multi(A=A, s=s, seed=seed, deterministic=deterministic)
 
 
 def topological_sort(A: _Array) -> _Out:
@@ -1442,96 +1209,9 @@ def bellman_ford(A: _Array, s: int) -> _Out:
   return pi, probes
 
 def bellman_ford_multi(A: _Array, s: int, seed: int, deterministic = False) -> _Out:
-  """Multiple solutions for Bellman-Ford's single-source shortest path (Bellman, 1958)."""
-  rng = np.random.RandomState(seed)
-
-  chex.assert_rank(A, 2)
-
-  A_pos = np.arange(A.shape[0])
-
-  # run many, make distribution
-  probeslist = []
-  pies = []
-  NUM_SOLUTIONS = 20
-
-  if deterministic:
-      NUM_SOLUTIONS = 1
-
-  for i in range(NUM_SOLUTIONS):
-      probes = probing.initialize(specs.SPECS['bellman_ford_multi'])
-
-      probing.push(
-          probes,
-          specs.Stage.INPUT,
-          next_probe={
-              'pos': np.copy(A_pos) * 1.0 / A.shape[0],
-              's': probing.mask_one(s, A.shape[0]),
-              'A': np.copy(A),
-              'adj': probing.graph(np.copy(A))
-          })
-
-      d = np.zeros(A.shape[0])
-      pi = np.arange(A.shape[0])
-      msk = np.zeros(A.shape[0])
-      d[s] = 0
-      msk[s] = 1
-
-      shuffled1 = np.arange(1, A.shape[0])
-      rng.shuffle(shuffled1)
-      shuffled1 = np.concatenate(([0],shuffled1))
-
-      # shuffled for inner loop
-      shuffled2 = np.arange(A.shape[0])
-      rng.shuffle(shuffled2)
-      while True:
-        prev_d = np.copy(d)
-        prev_msk = np.copy(msk)
-        probing.push(
-            probes,
-            specs.Stage.HINT,
-            next_probe={
-                'pi_h': np.copy(pi),
-                'd': np.copy(prev_d),
-                'msk': np.copy(prev_msk)
-            })
-        for u in shuffled1:
-          for v in shuffled2:
-            if prev_msk[u] == 1 and A[u, v] != 0:
-              if msk[v] == 0 or prev_d[u] + A[u, v] < d[v]:
-                d[v] = prev_d[u] + A[u, v]
-                pi[v] = u
-              msk[v] = 1
-        if np.all(d == prev_d):
-          break
-
-      probing.push(probes, specs.Stage.OUTPUT, next_probe={'pi': np.copy(pi)})
-      probing.finalize(probes)
-
-      pies.append(pi)
-      probeslist.append(probes)
-
-    # CHeck indent
-
-
-
-  ### copied from DFS CODE
-  # build adj matrix of "is i a parent of j in any pi", sums and divides.
-  adjs = []
-  for i in range(NUM_SOLUTIONS):
-      adj = np.zeros(A.shape)
-      for j in range(len(pies[0])):  # what's the parent of j?
-          #breakpoint()
-          adj[j, pies[i][j]] = 1  # at row j, put 1 in the column corresponding to parent
-      adjs.append(adj)
-  parent_dist = sum(adjs) / NUM_SOLUTIONS
-  # parent_dist = sp.special.logit(parent_dist)
-  # print(probes)
-  # print(parent_dist)
-  probeslist[0]['output']['node']['pi']['data'] = parent_dist
-
-  #breakpoint()
-  ## CHECK THE PUSHING!
-  return parent_dist, probeslist[0]
+  """Multiple-solution Bellman-Ford (Bellman, 1958)."""
+  return _multisol_bellman_ford_multi(
+      A=A, s=s, seed=seed, deterministic=deterministic)
 
 def dijkstra(A: _Array, s: int) -> _Out:
   """Dijkstra's single-source shortest path (Dijkstra, 1959)."""
