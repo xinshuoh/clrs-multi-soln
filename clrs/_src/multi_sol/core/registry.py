@@ -7,7 +7,10 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 
 SpecTransformer = Callable[[Dict[str, Any]], Dict[str, Any]]
+SpecFactory = Callable[[Dict[str, Dict[str, Any]]], Dict[str, Any]]
 SamplerFactory = Callable[[], type]
+Algorithm = Callable[..., Any]
+AlgorithmFactory = Callable[[], Algorithm]
 EvaluatorFn = Callable[..., dict]
 
 
@@ -19,7 +22,9 @@ class MultiSolAlgorithmExtension:
   base_algorithm_name: str
   output_name: str
   spec_transformer: Optional[SpecTransformer] = None
+  spec_factory: Optional[SpecFactory] = None
   sampler_factory: Optional[SamplerFactory] = None
+  algorithm_factory: Optional[AlgorithmFactory] = None
   evaluator: Optional[EvaluatorFn] = None
 
 
@@ -53,6 +58,9 @@ def build_overlay_specs(base_specs_map) -> Dict[str, Dict[str, Any]]:
   ensure_builtin_extensions_registered()
   overlays: Dict[str, Dict[str, Any]] = {}
   for extension in _EXTENSIONS.values():
+    if extension.spec_factory is not None:
+      overlays[extension.algorithm_name] = extension.spec_factory(base_specs_map)
+      continue
     if extension.spec_transformer is None:
       continue
     base_spec = base_specs_map[extension.base_algorithm_name]

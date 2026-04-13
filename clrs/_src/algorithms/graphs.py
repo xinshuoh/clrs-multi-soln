@@ -39,9 +39,6 @@ See "Introduction to Algorithms" 3ed (CLRS3) for more information.
 from typing import Tuple
 
 import chex
-from clrs._src.multi_sol.algorithms.multi_graphs import bellman_ford_multi as _multisol_bellman_ford_multi
-from clrs._src.multi_sol.algorithms.multi_graphs import bfs_multi as _multisol_bfs_multi
-from clrs._src.multi_sol.algorithms.multi_graphs import dfs_multi as _multisol_dfs_multi
 from clrs._src import probing
 from clrs._src import specs
 import numpy as np
@@ -176,16 +173,6 @@ def dfs(A: _Array) -> _Out:
   return pi, probes
 
 
-def dfs_multi(A: _Array, seed: int, deterministic = False) -> _Out:
-  """Multiple solution depth-first search (Moore, 1959)."""
-  return _multisol_dfs_multi(A=A, seed=seed, deterministic=deterministic)
-
-
-  #return pi, probes
-
-  #first arg gets thrown out. probes kept.
-
-
 def bfs(A: _Array, s: int) -> _Out:
   """Breadth-first search (Moore, 1959)."""
 
@@ -229,11 +216,6 @@ def bfs(A: _Array, s: int) -> _Out:
   probing.finalize(probes)
 
   return pi, probes
-
-def bfs_multi(A: _Array, s: int, seed: int, deterministic=False) -> _Out:
-  """Multiple solution breadth-first search."""
-  return _multisol_bfs_multi(A=A, s=s, seed=seed, deterministic=deterministic)
-
 
 def topological_sort(A: _Array) -> _Out:
   """Topological sorting (Knuth, 1973)."""
@@ -1207,11 +1189,6 @@ def bellman_ford(A: _Array, s: int) -> _Out:
   probing.finalize(probes)
 
   return pi, probes
-
-def bellman_ford_multi(A: _Array, s: int, seed: int, deterministic = False) -> _Out:
-  """Multiple-solution Bellman-Ford (Bellman, 1958)."""
-  return _multisol_bellman_ford_multi(
-      A=A, s=s, seed=seed, deterministic=deterministic)
 
 def dijkstra(A: _Array, s: int) -> _Out:
   """Dijkstra's single-source shortest path (Dijkstra, 1959)."""

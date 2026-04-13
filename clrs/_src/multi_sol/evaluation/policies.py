@@ -1,7 +1,6 @@
 """Evaluation policy registry for extension output types.
 
-Prefer `specs.Type.MULTI_SOLUTION` for new registrations. The legacy
-`specs.Type.MULT_SOL` key is kept as a temporary compatibility alias.
+Use `specs.Type.POINTER_DISTRIBUTION` for parent-distribution evaluation.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from clrs._src.multi_sol.evaluation import metrics
 
 
 _TYPE_EVAL_FNS: Dict[str, Callable] = {
-    specs.Type.MULTI_SOLUTION: metrics.multisol_score,
+    specs.Type.POINTER_DISTRIBUTION: metrics.multisol_score,
 }
 
 

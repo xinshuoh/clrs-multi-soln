@@ -26,9 +26,8 @@ Please run from inside this repo's outermost directory.
 - `clrs/examples/run.py` is the canonical path to train/evaluate models and produce results artifacts.
 - `clrs/examples/log_experiments.py` is deprecated and kept only as a compatibility wrapper around multi-solution plugins.
 - `clrs/_src/multi_sol/` contains the modular multi-solution framework (core/data/training/sampling/validation/evaluation) used by `run.py` dispatch and compatibility wrappers.
-  - Multi-solution extension code should target `specs.Type.MULTI_SOLUTION`.
-    `specs.Type.MULT_SOL` is a temporary compatibility alias and should not be
-    used for new extension guidance; remove it after parity tests pass.
+  - Multi-solution extension code should target
+    `specs.Type.POINTER_DISTRIBUTION`.
 - `results/viz.ipynb` lets you recreate the figures from `.csv` files
 - `clrs/_src/validate_distributions.py` does appendix stuff
 

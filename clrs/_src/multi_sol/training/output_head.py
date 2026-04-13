@@ -4,5 +4,5 @@ import jax
 
 
 def multisol_softmax(logits, axis: int = -1):
-  """Convert MULTI_SOLUTION logits to parent-distribution probabilities."""
+  """Convert POINTER_DISTRIBUTION logits to parent-distribution probabilities."""
   return jax.nn.softmax(logits, axis=axis)

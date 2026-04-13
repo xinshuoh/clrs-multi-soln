@@ -1,8 +1,7 @@
 """Multi-solution graph-target generators.
 
 This module keeps multi-solution target generation out of the base CLRS graph
-algorithm implementations. Base wrappers in `clrs._src.algorithms.graphs`
-delegate here for compatibility.
+algorithm implementations.
 """
 
 from typing import Tuple
@@ -10,11 +9,16 @@ from typing import Tuple
 import chex
 from clrs._src import probing
 from clrs._src import specs
+from clrs._src.multi_sol.core import registry as multisol_registry
 import numpy as np
 
 _Array = np.ndarray
 _Out = Tuple[_Array, probing.ProbesDict]
 _NUM_SOLUTIONS = 20
+
+
+def _resolve_multisol_spec(algorithm_name: str) -> specs.Spec:
+  return multisol_registry.resolve_specs(specs.SPECS)[algorithm_name]
 
 
 def _parent_distribution_from_trees(parent_trees, num_nodes: int) -> _Array:
@@ -34,10 +38,11 @@ def dfs_multi(A: _Array, seed: int, deterministic: bool = False) -> _Out:
   chex.assert_rank(A, 2)
   probeslist = []
   pies = []
+  algorithm_spec = _resolve_multisol_spec("dfs_multi")
 
   num_solutions = 1 if deterministic else _NUM_SOLUTIONS
   for _ in range(num_solutions):
-    probes = probing.initialize(specs.SPECS['dfs_multi'])
+    probes = probing.initialize(algorithm_spec)
 
     A_pos = np.arange(A.shape[0])
     probing.push(
@@ -167,10 +172,11 @@ def bfs_multi(A: _Array, s: int, seed: int, deterministic: bool = False) -> _Out
   chex.assert_rank(A, 2)
   probeslist = []
   pies = []
+  algorithm_spec = _resolve_multisol_spec("bfs_multi")
 
   num_solutions = 1 if deterministic else _NUM_SOLUTIONS
   for _ in range(num_solutions):
-    probes = probing.initialize(specs.SPECS['bfs_multi'])
+    probes = probing.initialize(algorithm_spec)
     A_pos = np.arange(A.shape[0])
     probing.push(
         probes,
@@ -230,10 +236,11 @@ def bellman_ford_multi(
   A_pos = np.arange(A.shape[0])
   probeslist = []
   pies = []
+  algorithm_spec = _resolve_multisol_spec("bellman_ford_multi")
 
   num_solutions = 1 if deterministic else _NUM_SOLUTIONS
   for _ in range(num_solutions):
-    probes = probing.initialize(specs.SPECS['bellman_ford_multi'])
+    probes = probing.initialize(algorithm_spec)
     probing.push(
         probes,
         specs.Stage.INPUT,
@@ -288,4 +295,3 @@ def bellman_ford_multi(
 
 
 __all__ = ("dfs_multi", "bfs_multi", "bellman_ford_multi")
-

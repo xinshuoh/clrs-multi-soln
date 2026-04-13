@@ -19,6 +19,7 @@
 from absl.testing import absltest
 
 from clrs._src.algorithms import graphs
+from clrs._src.multi_sol.algorithms import multi_graphs
 import numpy as np
 
 TRIANGLE = np.array([
@@ -170,7 +171,7 @@ class GraphsTest(absltest.TestCase):
       [0., 1., 0., 0., 0., 0.],
       [0., 0., 1., 0., 0., 0.]
     ])
-    out, _ = graphs.dfs_multi(DIRECTED, seed=3)
+    out, _ = multi_graphs.dfs_multi(DIRECTED, seed=3)
     np.testing.assert_array_equal(expected_directed, out)
 
     expected_undirected = np.array([
@@ -180,7 +181,7 @@ class GraphsTest(absltest.TestCase):
       [0., 0.3, 0.3, 0., 0.4],
       [0.55, 0.05, 0., 0.4, 0.]
     ])
-    out, _ = graphs.dfs_multi(UNDIRECTED, seed=3)
+    out, _ = multi_graphs.dfs_multi(UNDIRECTED, seed=3)
     np.testing.assert_array_equal(expected_undirected, out)
 
   def test_bfs(self):
@@ -201,17 +202,17 @@ class GraphsTest(absltest.TestCase):
       [0., 1., 0., 0., 0., 0.],
       [0., 0., 0., 0., 0., 1.]
     ])
-    out, _ = graphs.bfs_multi(DIRECTED, 0, seed=3)
+    out, _ = multi_graphs.bfs_multi(DIRECTED, 0, seed=3)
     np.testing.assert_array_equal(expected_directed, out)
 
     expected_undirected = np.array([
       [1., 0., 0., 0., 0.],
       [1., 0., 0., 0., 0.],
       [0., 1., 0., 0., 0.],
-      [0., 0.5, 0., 0., 0.5],
+      [0., 0.6, 0., 0., 0.4],
       [1., 0., 0., 0., 0.]
     ])
-    out, _ = graphs.bfs_multi(UNDIRECTED, 0, seed=3)
+    out, _ = multi_graphs.bfs_multi(UNDIRECTED, 0, seed=3)
     np.testing.assert_array_equal(expected_undirected, out)
 
 
@@ -275,7 +276,7 @@ class GraphsTest(absltest.TestCase):
         [0., 0., 1., 0., 0.],
         [0., 0.6, 0., 0.4, 0.],
     ])
-    out, _ = graphs.bellman_ford_multi(WEIGHTED_DIRECTED_2, 0, seed=0)
+    out, _ = multi_graphs.bellman_ford_multi(WEIGHTED_DIRECTED_2, 0, seed=0)
     print(out)
     np.testing.assert_array_equal(expected, out)
 

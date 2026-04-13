@@ -24,7 +24,6 @@ from typing import Any, Callable, List, Optional, Tuple
 from absl import logging
 
 from clrs._src import algorithms
-from clrs._src.multi_sol.data import samplers as multisol_samplers
 from clrs._src.multi_sol.core import registry as multisol_registry
 from clrs._src import probing
 from clrs._src import specs
@@ -294,7 +293,11 @@ def build_sampler(
   if name not in resolved_specs or name not in SAMPLERS:
     raise NotImplementedError(f'No implementation of algorithm {name}.')
   spec = resolved_specs[name]
-  algorithm = getattr(algorithms, name)
+  extension = multisol_registry.get_extension(name)
+  if extension is not None and extension.algorithm_factory is not None:
+    algorithm = extension.algorithm_factory()
+  else:
+    algorithm = getattr(algorithms, name)
   sampler_class = SAMPLERS[name]
   # Ignore kwargs not accepted by the sampler.
   sampler_args = inspect.signature(sampler_class._sample_data).parameters  # pylint:disable=protected-access
@@ -424,16 +427,6 @@ class DfsSampler(Sampler):
         nb_nodes=length, p=self._rng.choice(p),
         directed=True, acyclic=False, weighted=False)
     return [graph]
-  
-class DfsMultiSampler(Sampler):
-  """DFS sampler that passes seed for multi-solution generation."""
-  
-  def _sample_data(
-      self, 
-      length: int, 
-      p: Tuple[float, ...] = (0.5,),
-    ):
-      return multisol_samplers.sample_data_dfs_multi(self, length=length, p=p)
 
 
 class BfsSampler(Sampler):
@@ -449,17 +442,6 @@ class BfsSampler(Sampler):
         directed=False, acyclic=False, weighted=False)
     source_node = self._rng.choice(length)
     return [graph, source_node]
-
-
-class BfsMultiSampler(Sampler):
-  """BFS sampler that passes seed for multi-solution generation."""
-
-  def _sample_data(
-      self,
-      length: int,
-      p: Tuple[float, ...] = (0.5,),
-  ):
-    return multisol_samplers.sample_data_bfs_multi(self, length=length, p=p)
 
 
 class TopoSampler(Sampler):
@@ -532,20 +514,6 @@ class BellmanFordSampler(Sampler):
     source_node = self._rng.choice(length)
     #breakpoint()
     return [graph, source_node]
-
-
-class BellmanFordMultiSampler(Sampler):
-  """Bellman-Ford sampler with per-instance seed for multi-solution labels."""
-
-  def _sample_data(
-      self,
-      length: int,
-      p: Tuple[float, ...] = (0.5,),
-      low: int = 1,
-      high: int = 3,
-  ):
-    return multisol_samplers.sample_data_bellman_ford_multi(
-        self, length=length, p=p, low=low, high=high)
 
 
 class DAGPathSampler(Sampler):
@@ -709,17 +677,14 @@ SAMPLERS = {
     'activity_selector': ActivitySampler,
     'task_scheduling': TaskSampler,
     'dfs': DfsSampler,
-    'dfs_multi': DfsMultiSampler,
     'topological_sort': TopoSampler,
     'strongly_connected_components': SccSampler,
     'articulation_points': ArticulationSampler,
     'bridges': ArticulationSampler,
     'bfs': BfsSampler,
-    'bfs_multi': BfsMultiSampler,
     'mst_kruskal': MSTSampler,
     'mst_prim': BellmanFordSampler,
     'bellman_ford': BellmanFordSampler,
-    'bellman_ford_multi': BellmanFordMultiSampler,
     'dag_shortest_paths': DAGPathSampler,
     'dijkstra': BellmanFordSampler,
     'floyd_warshall': FloydWarshallSampler,

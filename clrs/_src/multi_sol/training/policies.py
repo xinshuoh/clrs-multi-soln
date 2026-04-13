@@ -1,8 +1,6 @@
 """Output-type policy registry for multi-solution training semantics.
 
-Prefer `specs.Type.MULTI_SOLUTION` for new type policies. `specs.Type.MULT_SOL`
-is still accepted as a compatibility alias while multi-solution parity tests
-are being finalized.
+Use `specs.Type.POINTER_DISTRIBUTION` for parent-distribution outputs.
 """
 
 from __future__ import annotations
@@ -145,7 +143,7 @@ def _multisol_decode_node_logits(
 
 def _multisol_postprocess(data, hard: bool):
   del hard
-  return output_head.multisol_softmax(data, axis=-1), specs.Type.MULTI_SOLUTION
+  return output_head.multisol_softmax(data, axis=-1), specs.Type.POINTER_DISTRIBUTION
 
 
 def _multisol_output_loss(truth_data, pred_logits):
@@ -157,7 +155,7 @@ def _multisol_output_loss_elementwise(truth_data, pred_logits):
 
 
 register_type_policy(
-    specs.Type.MULTI_SOLUTION,
+    specs.Type.POINTER_DISTRIBUTION,
     TypePolicy(
         construct_node_decoders=_multisol_construct_node_decoders,
         decode_node_logits=_multisol_decode_node_logits,
