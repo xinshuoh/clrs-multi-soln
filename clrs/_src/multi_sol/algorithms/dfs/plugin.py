@@ -25,6 +25,7 @@ def evaluate_dfs_multisol_batch(
     filename="dfs_accuracy",
     vd_flag=False,
     NSE=100,
+    output_dir=".",
 ) -> Dict[str, float]:
   """Collect, evaluate, sample, validate and save DFS multi-solution results."""
   processed_samples = 0
@@ -51,6 +52,7 @@ def evaluate_dfs_multisol_batch(
         outputs=outputs,
         pred_batches=pred_batches,
         nse=NSE,
+        output_dir=output_dir,
     )
   source_nodes = [0] * len(adjacency)
   out = clrs.evaluate(outputs, preds)

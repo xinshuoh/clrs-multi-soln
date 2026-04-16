@@ -7,6 +7,7 @@ from clrs._src.multi_sol.data.distribution import extract_probability_matrices
 from sciplotlib import style as spstyle
 from clrs._src.algorithms.graphs import bellman_ford, dfs
 
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,6 +16,13 @@ print('graph1 hooks to BF_collect_and_eval in log_experiments.py')
 print('edge_reuse_matrix_list works on dummy example')
 
 # TODO: make make_edge_reuse_matrix_list split by unique/valid trees
+
+
+def _resolve_plot_path(filename, output_dir="."):
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        return os.path.join(output_dir, filename)
+    return filename
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -160,7 +168,7 @@ def DFS_graph1_df(A, pred, num_solutions_extracted):
     return df, A, pred
 
 
-def plot_edge_reuse_matrix_list_mean_dfs(df, graphsize):
+def plot_edge_reuse_matrix_list_mean_dfs(df, graphsize, output_dir="."):
     """FIXME: .iloc[-1] is taking only the last number? after the max number of solutions."""
     with plt.style.context(spstyle.get_style('nature-reviews')):
         fig, ax = plt.subplots(ncols=1, sharey=True)
@@ -196,7 +204,7 @@ def plot_edge_reuse_matrix_list_mean_dfs(df, graphsize):
     plt.title(f'Mean average edge reuse for n = {graphsize} (DFS)')
     plt.ylabel('Mean average edge reuse')
     plt.tight_layout()
-    plt.savefig("edge_reuse_mean_" + str(graphsize) + "_dfs.png")
+    plt.savefig(_resolve_plot_path("edge_reuse_mean_" + str(graphsize) + "_dfs.png", output_dir))
     plt.close()
 
 
@@ -405,7 +413,7 @@ def make_n_unique_by_n_extracted_df_dfs(A, s, pred, num_solutions_extracted):
     return df
 
 
-def plot_n_unique_by_n_extracted_dfs(df, graphsize):
+def plot_n_unique_by_n_extracted_dfs(df, graphsize, output_dir="."):
     """Plots a df produced by make_n_unique_by_n_extracted_df"""
     with plt.style.context(spstyle.get_style('nature-reviews')):
         fig, ax = plt.subplots(ncols=1, sharey=True)
@@ -443,9 +451,9 @@ def plot_n_unique_by_n_extracted_dfs(df, graphsize):
     plt.xlabel('Sampled solutions')
     plt.ylabel('Unique and valid solutions')
     plt.tight_layout()
-    plt.savefig(f"plot_unique_by_extracted_{graphsize}_dfs.png")
+    plt.savefig(_resolve_plot_path(f"plot_unique_by_extracted_{graphsize}_dfs.png", output_dir))
 
-def line_plot_dfs(df_list, graphsize):
+def line_plot_dfs(df_list, graphsize, output_dir="."):
     """
     Line Plots with Confidence Interval for this type of random graph (Confidence that mean lies within here) FIXME CIs are weird here
     Args:
@@ -491,7 +499,7 @@ def line_plot_dfs(df_list, graphsize):
     plt.ylabel('Mean average edge reuse')
     plt.xlabel('Number of solutions extracted')
     plt.tight_layout()
-    plt.savefig(f"edge_reuse_lineplot{graphsize}_dfs.png")
+    plt.savefig(_resolve_plot_path(f"edge_reuse_lineplot{graphsize}_dfs.png", output_dir))
     plt.close()
 
 
@@ -648,7 +656,7 @@ def make_n_unique_by_n_extracted_df(A, s, pred, num_solutions_extracted):
     return df
 
 
-def plot_n_unique_by_n_extracted(df, graphsize):
+def plot_n_unique_by_n_extracted(df, graphsize, output_dir="."):
     """Plots a df produced by make_n_unique_by_n_extracted_df"""
     with plt.style.context(spstyle.get_style('nature-reviews')):
         fig, ax = plt.subplots(ncols=1, sharey=True)
@@ -681,7 +689,7 @@ def plot_n_unique_by_n_extracted(df, graphsize):
     plt.xlabel('Sampled solutions')
     plt.ylabel('Unique and valid solutions')
     plt.tight_layout()
-    plt.savefig(f"plot_unique_by_extracted_{graphsize}.png")
+    plt.savefig(_resolve_plot_path(f"plot_unique_by_extracted_{graphsize}.png", output_dir))
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -779,7 +787,7 @@ def postprocess_edge_reuse_matrix_list(matrix_lists):
     return df
 
 
-def plot_edge_reuse_matrix_list_mean(df, graphsize):
+def plot_edge_reuse_matrix_list_mean(df, graphsize, output_dir="."):
     """FIXME: .iloc[-1] is taking only the last number? after the max number of solutions."""
     with plt.style.context(spstyle.get_style('nature-reviews')):
         fig, ax = plt.subplots(ncols=1, sharey=True)
@@ -815,11 +823,11 @@ def plot_edge_reuse_matrix_list_mean(df, graphsize):
     plt.title(f'Mean average edge reuse for n = {graphsize} (BF)')
     plt.ylabel('Mean average edge reuse')
     plt.tight_layout()
-    plt.savefig("edge_reuse_mean_"+str(graphsize)+".png")
+    plt.savefig(_resolve_plot_path("edge_reuse_mean_"+str(graphsize)+".png", output_dir))
     plt.close()
 
 
-def line_plot(df_list, graphsize):
+def line_plot(df_list, graphsize, output_dir="."):
     """
     Line Plots with Confidence Interval for this type of random graph (Confidence that mean lies within here) FIXME CIs are weird here
     Args:
@@ -865,7 +873,7 @@ def line_plot(df_list, graphsize):
     plt.ylabel('Mean average edge reuse')
     plt.xlabel('Number of solutions extracted')
     plt.tight_layout()
-    plt.savefig("edge_reuse_lineplot" + str(graphsize) + ".png")
+    plt.savefig(_resolve_plot_path("edge_reuse_lineplot" + str(graphsize) + ".png", output_dir))
     plt.close()
 
 

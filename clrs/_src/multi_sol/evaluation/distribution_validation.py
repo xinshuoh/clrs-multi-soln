@@ -10,6 +10,7 @@ def run_bf_distribution_validation(
     outputs,
     preds,
     nse: int,
+    output_dir: str = ".",
 ) -> None:
   """Run Bellman-Ford legacy distribution-validation side effects."""
   from clrs._src.multi_sol.data.distribution_generation import (
@@ -33,9 +34,11 @@ def run_bf_distribution_validation(
       nse=nse,
       mode="BF",
   )
-  plot_n_unique_by_n_extracted(uniqueness_dataframes, payload.graph_size)
-  plot_edge_reuse_matrix_list_mean(edge_reuse_df, payload.graph_size)
-  line_plot(edge_reuse_df, payload.graph_size)
+  plot_n_unique_by_n_extracted(
+      uniqueness_dataframes, payload.graph_size, output_dir=output_dir)
+  plot_edge_reuse_matrix_list_mean(
+      edge_reuse_df, payload.graph_size, output_dir=output_dir)
+  line_plot(edge_reuse_df, payload.graph_size, output_dir=output_dir)
 
 
 def run_dfs_distribution_validation(
@@ -44,6 +47,7 @@ def run_dfs_distribution_validation(
     outputs,
     pred_batches,
     nse: int,
+    output_dir: str = ".",
 ) -> None:
   """Run DFS legacy distribution-validation side effects."""
   from clrs._src.multi_sol.data.distribution_generation import (
@@ -66,6 +70,8 @@ def run_dfs_distribution_validation(
       nse=nse,
       mode="DFS",
   )
-  plot_n_unique_by_n_extracted_dfs(uniqueness_dataframes, payload.graph_size)
-  plot_edge_reuse_matrix_list_mean_dfs(edge_reuse_df, payload.graph_size)
-  line_plot_dfs(edge_reuse_df, payload.graph_size)
+  plot_n_unique_by_n_extracted_dfs(
+      uniqueness_dataframes, payload.graph_size, output_dir=output_dir)
+  plot_edge_reuse_matrix_list_mean_dfs(
+      edge_reuse_df, payload.graph_size, output_dir=output_dir)
+  line_plot_dfs(edge_reuse_df, payload.graph_size, output_dir=output_dir)

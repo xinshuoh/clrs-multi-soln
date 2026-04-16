@@ -12,10 +12,16 @@ if you care about permuting
 ## Commands that matter:
 
 *Running (modify flags to your liking)*
+``` 
+python -m clrs.examples.run --train_steps 10000 --algorithms dfs_multi --hint_mode none --results_df --save_df --save_model_to_file --NSE 25 --filename fourth16 --test_length 16
+python -m clrs.examples.run --train_steps 10000 --algorithms dfs_multi --hint_mode none --results_df --save_df --save_model_to_file --NSE 25 --filename fifth16 --test_length 16
 ```
-!python -m clrs.examples.run --train_steps 10000 --algorithms dfs --hint_mode none --results_df True --save_df True --save_model_to_file True --NSE 25 --filename fourth16 --test_length 16
-!python -m clrs.examples.run --train_steps 10000 --algorithms dfs --hint_mode none --results_df True --save_df True --save_model_to_file True --NSE 25 --filename fifth16 --test_length 16
-```
+Use `dfs`/`bfs`/`bellman_ford` for base single-solution runs, and
+`dfs_multi`/`bfs_multi`/`bellman_ford_multi` for extension-based multi-solution
+evaluation.
+By default each run now writes reports/CSVs/artifacts under
+`results/<timestamp>/`. Override with `--run_dir=/path/to/output`.
+
 Please run from inside this repo's outermost directory.
 
 *Evaluate*

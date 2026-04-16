@@ -125,6 +125,86 @@ class RunMultisolDispatchTest(absltest.TestCase):
     self.assertTrue(called["extension"])
     self.assertEqual(out["score"], 0.9)
 
+  def test_sampling_profile_uses_custom_report_sink(self):
+    called = {"fallback": False, "extension": False}
+
+    def custom_sink(_result_dict, _filename):
+      del _result_dict, _filename
+
+    def extension_evaluator(**kwargs):
+      called["extension"] = True
+      self.assertIs(kwargs["save_results_fn"], custom_sink)
+      return {"score": 0.8}
+
+    def fallback_eval_fn(**kwargs):
+      del kwargs
+      called["fallback"] = True
+      return {"score": 0.1}
+
+    out = dispatch.evaluate_with_optional_extension(
+        algorithm_name="dfs_multi",
+        profile="sampling",
+        extension_evaluator=extension_evaluator,
+        sampler=object(),
+        predict_fn=object(),
+        sample_count=3,
+        rng_key=0,
+        extras={},
+        artifact_prefix="unused",
+        save_artifacts=False,
+        fallback_eval_fn=fallback_eval_fn,
+        report_sink=custom_sink,
+    )
+    self.assertFalse(called["fallback"])
+    self.assertTrue(called["extension"])
+    self.assertEqual(out["score"], 0.8)
+
+  def test_sampling_profile_filters_unsupported_extension_kwargs(self):
+    called = {"fallback": False, "extension": False}
+    seen = {}
+
+    def extension_evaluator(
+        *,
+        sampler,
+        predict_fn,
+        sample_count,
+        rng_key,
+        extras,
+        save_results_fn,
+        filename,
+        NSE,
+    ):
+      del sampler, predict_fn, sample_count, rng_key, extras, save_results_fn
+      seen["filename"] = filename
+      seen["NSE"] = NSE
+      called["extension"] = True
+      return {"score": 0.7}
+
+    def fallback_eval_fn(**kwargs):
+      del kwargs
+      called["fallback"] = True
+      return {"score": 0.1}
+
+    out = dispatch.evaluate_with_optional_extension(
+        algorithm_name="dfs_multi",
+        profile="sampling",
+        extension_evaluator=extension_evaluator,
+        sampler=object(),
+        predict_fn=object(),
+        sample_count=3,
+        rng_key=0,
+        extras={},
+        artifact_prefix="unused",
+        save_artifacts=False,
+        fallback_eval_fn=fallback_eval_fn,
+        extension_kwargs={"NSE": 17, "vd_flag": True},
+    )
+    self.assertFalse(called["fallback"])
+    self.assertTrue(called["extension"])
+    self.assertEqual(out["score"], 0.7)
+    self.assertEqual(seen["NSE"], 17)
+    self.assertEqual(seen["filename"], "unused_dfs_multi")
+
   def test_registry_dispatch_uses_registered_extension(self):
     called = {"fallback": False, "extension": False}
     seen = {}
@@ -265,6 +345,14 @@ class RunMultisolDispatchTest(absltest.TestCase):
     self.assertEqual(defaults["evaluation_profile"], "default")
     self.assertIs(defaults["save_sampling_artifacts"], False)
     self.assertEqual(defaults["sampling_artifact_prefix"], "sampling_eval")
+    self.assertEqual(defaults["run_dir"], "")
+    self.assertEqual(defaults["filename"], "")
+    self.assertIs(defaults["results_df"], False)
+    self.assertIs(defaults["save_df"], False)
+    self.assertIs(defaults["save_model_to_file"], False)
+    self.assertIs(defaults["validate_distributions"], False)
+    self.assertEqual(defaults["NSE"], 25)
+    self.assertIsNone(defaults["test_length"])
 
 
 if __name__ == "__main__":

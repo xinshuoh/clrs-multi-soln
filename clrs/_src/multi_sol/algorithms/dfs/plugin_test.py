@@ -181,12 +181,14 @@ class DfsPluginTest(unittest.TestCase):
         filename="dfs_case",
         vd_flag=True,
         NSE=42,
+        output_dir="results/run-7",
     )
 
     self.assertEqual(saved["filename"], "dfs_case_DFS")
     self.assertEqual(out["score"], 0.66)
     self.assertEqual(out["phase"], "ok")
     self.assertEqual(captured_validation["nse"], 42)
+    self.assertEqual(captured_validation["output_dir"], "results/run-7")
     np.testing.assert_array_equal(captured_validation["adjacency"], adjacency)
 
 

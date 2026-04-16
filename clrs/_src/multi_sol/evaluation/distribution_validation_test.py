@@ -79,23 +79,23 @@ class DistributionValidationTest(unittest.TestCase):
                          data_gen_module)
 
     validate_module = types.ModuleType("clrs._src.validate_distributions")
-    def _plot_bf_unique(dataframes, graph_size):
-      self.calls["plot_bf_unique"] = (dataframes, graph_size)
+    def _plot_bf_unique(dataframes, graph_size, output_dir="."):
+      self.calls["plot_bf_unique"] = (dataframes, graph_size, output_dir)
 
-    def _plot_bf_reuse(df, graph_size):
-      self.calls["plot_bf_reuse"] = (df, graph_size)
+    def _plot_bf_reuse(df, graph_size, output_dir="."):
+      self.calls["plot_bf_reuse"] = (df, graph_size, output_dir)
 
-    def _plot_bf_line(df, graph_size):
-      self.calls["plot_bf_line"] = (df, graph_size)
+    def _plot_bf_line(df, graph_size, output_dir="."):
+      self.calls["plot_bf_line"] = (df, graph_size, output_dir)
 
-    def _plot_dfs_unique(dataframes, graph_size):
-      self.calls["plot_dfs_unique"] = (dataframes, graph_size)
+    def _plot_dfs_unique(dataframes, graph_size, output_dir="."):
+      self.calls["plot_dfs_unique"] = (dataframes, graph_size, output_dir)
 
-    def _plot_dfs_reuse(df, graph_size):
-      self.calls["plot_dfs_reuse"] = (df, graph_size)
+    def _plot_dfs_reuse(df, graph_size, output_dir="."):
+      self.calls["plot_dfs_reuse"] = (df, graph_size, output_dir)
 
-    def _plot_dfs_line(df, graph_size):
-      self.calls["plot_dfs_line"] = (df, graph_size)
+    def _plot_dfs_line(df, graph_size, output_dir="."):
+      self.calls["plot_dfs_line"] = (df, graph_size, output_dir)
 
     validate_module.plot_n_unique_by_n_extracted = _plot_bf_unique
     validate_module.plot_edge_reuse_matrix_list_mean = _plot_bf_reuse
@@ -125,15 +125,16 @@ class DistributionValidationTest(unittest.TestCase):
         outputs={"o": 1},
         preds={"p": 2},
         nse=55,
+        output_dir="results/run-1",
     )
 
     self.assertEqual(self.calls["bf_payload"]["outputs"], {"o": 1})
     self.assertEqual(self.calls["bf_payload"]["preds"], {"p": 2})
     self.assertEqual(self.calls["gen_kwargs"]["nse"], 55)
     self.assertEqual(self.calls["gen_kwargs"]["mode"], "BF")
-    self.assertEqual(self.calls["plot_bf_unique"], (["u"], 3))
-    self.assertEqual(self.calls["plot_bf_reuse"], (["e"], 3))
-    self.assertEqual(self.calls["plot_bf_line"], (["e"], 3))
+    self.assertEqual(self.calls["plot_bf_unique"], (["u"], 3, "results/run-1"))
+    self.assertEqual(self.calls["plot_bf_reuse"], (["e"], 3, "results/run-1"))
+    self.assertEqual(self.calls["plot_bf_line"], (["e"], 3, "results/run-1"))
 
   def test_run_dfs_distribution_validation(self):
     module = self._load_module_with_stubs()
@@ -142,15 +143,16 @@ class DistributionValidationTest(unittest.TestCase):
         outputs={"o": 1},
         pred_batches=[{"p": 2}],
         nse=44,
+        output_dir="results/run-2",
     )
 
     self.assertEqual(self.calls["dfs_payload"]["outputs"], {"o": 1})
     self.assertEqual(self.calls["dfs_payload"]["preds"], [{"p": 2}])
     self.assertEqual(self.calls["gen_kwargs"]["nse"], 44)
     self.assertEqual(self.calls["gen_kwargs"]["mode"], "DFS")
-    self.assertEqual(self.calls["plot_dfs_unique"], (["u"], 4))
-    self.assertEqual(self.calls["plot_dfs_reuse"], (["e"], 4))
-    self.assertEqual(self.calls["plot_dfs_line"], (["e"], 4))
+    self.assertEqual(self.calls["plot_dfs_unique"], (["u"], 4, "results/run-2"))
+    self.assertEqual(self.calls["plot_dfs_reuse"], (["e"], 4, "results/run-2"))
+    self.assertEqual(self.calls["plot_dfs_line"], (["e"], 4, "results/run-2"))
 
 
 if __name__ == "__main__":

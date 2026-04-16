@@ -190,12 +190,14 @@ class BellmanFordPluginTest(unittest.TestCase):
         filename="bf_case",
         vd_flag=True,
         NSE=37,
+        output_dir="results/run-9",
     )
 
     self.assertEqual(saved["filename"], "bf_case_BF")
     self.assertEqual(out["score"], 0.77)
     self.assertEqual(out["phase"], "ok")
     self.assertEqual(captured_validation["nse"], 37)
+    self.assertEqual(captured_validation["output_dir"], "results/run-9")
     np.testing.assert_array_equal(captured_validation["adjacency"], adjacency)
     np.testing.assert_array_equal(captured_validation["source_nodes"],
                                   np.asarray([0]))

@@ -31,7 +31,12 @@ def _warn_deprecated(symbol):
 def save_results(result_dict, filename):
   """Compatibility alias for CSV report sink."""
   _warn_deprecated("save_results")
-  reporting.save_csv_report(result_dict, filename)
+  reporting.save_csv_report(
+      result_dict,
+      filename,
+      output_dir='.',
+      timestamped=False,
+  )
 
 
 def BF_collect_and_eval(

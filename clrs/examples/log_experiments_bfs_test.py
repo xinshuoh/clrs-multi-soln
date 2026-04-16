@@ -238,11 +238,15 @@ class LogExperimentsWrapperTest(unittest.TestCase):
     self._install_package("clrs._src.multi_sol.evaluation")
 
     reporting_module = types.ModuleType("clrs._src.multi_sol.evaluation.reporting")
-    reporting_module.save_csv_report = (
-        lambda result_dict, filename: writes.update({
-            "result_dict": result_dict,
-            "filename": filename,
-        }))
+
+    def _save_csv_report(result_dict, filename, **kwargs):
+      writes.update({
+          "result_dict": result_dict,
+          "filename": filename,
+          "kwargs": kwargs,
+      })
+
+    reporting_module.save_csv_report = _save_csv_report
     self._install_module("clrs._src.multi_sol.evaluation.reporting",
                          reporting_module)
 
@@ -275,6 +279,8 @@ class LogExperimentsWrapperTest(unittest.TestCase):
 
     self.assertEqual(writes["result_dict"], {"a": [1]})
     self.assertEqual(writes["filename"], "sample")
+    self.assertEqual(writes["kwargs"]["output_dir"], ".")
+    self.assertFalse(writes["kwargs"]["timestamped"])
     self._assert_deprecation_warning(caught, "save_results")
 
   def test_main_exits_with_deprecation_guidance(self):

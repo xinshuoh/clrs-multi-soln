@@ -16,6 +16,7 @@
 """Run training of one or more algorithmic tasks from CLRS."""
 
 import functools
+from datetime import datetime
 import os
 import shutil
 from typing import Any, Dict, List, Optional
@@ -30,12 +31,21 @@ import requests
 import tensorflow as tf
 
 from clrs._src.multi_sol.evaluation import dispatch as multisol_dispatch
+from clrs._src.multi_sol.evaluation import reporting as multisol_reporting
 
 
 flags.DEFINE_list('algorithms', ['bfs'], 'Which algorithms to run.')
 flags.DEFINE_list('train_lengths', ['4', '7', '11', '13', '16'],
                   'Which training sizes to use. A size of -1 means '
                   'use the benchmark dataset.')
+flags.DEFINE_list(
+    'test_lengths',
+    ['-1'],
+    'Test sizes to use. -1 uses benchmark test dataset.')
+flags.DEFINE_integer(
+    'test_length',
+    None,
+    'Legacy alias for single test size; overrides --test_lengths when set.')
 flags.DEFINE_integer('length_needle', -8,
                      'Length of needle for training and validation '
                      '(not testing) in string matching algorithms. '
@@ -133,6 +143,42 @@ flags.DEFINE_string(
     'sampling_artifact_prefix',
     'sampling_eval',
     'Filename prefix for saved sampling artifacts.')
+flags.DEFINE_string(
+    'run_dir',
+    '',
+    'Output directory for this run. Default: results/<timestamp>/.')
+flags.DEFINE_string(
+    'filename',
+    '',
+    'Legacy-compatible base filename for experiment outputs.')
+flags.DEFINE_boolean(
+    'results_df',
+    False,
+    'Collect train/validation metric rows for CSV export.')
+flags.DEFINE_boolean(
+    'save_df',
+    False,
+    'Persist collected metric rows to CSV (legacy-compatible behavior).')
+flags.DEFINE_string(
+    'results_df_filename',
+    '',
+    'Optional CSV filename for --save_df (default: score-results).')
+flags.DEFINE_boolean(
+    'save_model_to_file',
+    False,
+    'Persist full model params/optimizer state to a permanent .pkl file.')
+flags.DEFINE_string(
+    'model_output_path',
+    '',
+    'Output path for --save_model_to_file (default derived from --filename).')
+flags.DEFINE_boolean(
+    'validate_distributions',
+    False,
+    'Enable legacy distribution-validation side effects in extension evaluators.')
+flags.DEFINE_integer(
+    'NSE',
+    25,
+    'Legacy-compatible number of extracted solutions for distribution validation.')
 
 FLAGS = flags.FLAGS
 
@@ -422,6 +468,74 @@ def create_samplers(
           spec_list)
 
 
+def _resolve_test_lengths() -> List[int]:
+  if FLAGS.test_length is not None:
+    return [FLAGS.test_length]
+  return [int(x) for x in FLAGS.test_lengths]
+
+
+def _legacy_sampling_requested() -> bool:
+  return bool(FLAGS.filename) or FLAGS.validate_distributions or FLAGS.NSE != 25
+
+
+def _resolve_run_dir() -> str:
+  if FLAGS.run_dir:
+    run_dir = FLAGS.run_dir
+  else:
+    run_dir = os.path.join('results', datetime.now().strftime('%Y%m%d_%H%M%S'))
+  os.makedirs(run_dir, exist_ok=True)
+  return run_dir
+
+
+def _effective_evaluation_profile() -> str:
+  if FLAGS.evaluation_profile != 'default':
+    return FLAGS.evaluation_profile
+  if _legacy_sampling_requested():
+    return 'sampling'
+  return 'default'
+
+
+def _extension_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
+  kwargs = {
+      'vd_flag': FLAGS.validate_distributions,
+      'NSE': FLAGS.NSE,
+      'output_dir': run_dir,
+  }
+  if split == 'test' and FLAGS.filename:
+    kwargs['filename'] = FLAGS.filename
+  return kwargs
+
+
+def _sampling_report_sink(split: str, profile: str, run_dir: str):
+  if split != 'test' or profile != 'sampling':
+    return None
+  if FLAGS.filename:
+    return functools.partial(
+        multisol_reporting.save_csv_report,
+        output_dir=run_dir,
+        timestamped=False,
+    )
+  if FLAGS.save_sampling_artifacts:
+    return functools.partial(
+        multisol_reporting.save_pickle_report,
+        output_dir=run_dir,
+        timestamped=True,
+    )
+  return None
+
+
+def _default_results_df_filename() -> str:
+  return FLAGS.results_df_filename or 'score-results'
+
+
+def _default_model_output_path(run_dir: str) -> str:
+  if FLAGS.model_output_path:
+    return FLAGS.model_output_path
+  if FLAGS.filename:
+    return os.path.join(run_dir, f'{FLAGS.filename}_model.pkl')
+  return os.path.join(run_dir, 'eval_model.pkl')
+
+
 def main(unused_argv):
   if FLAGS.hint_mode == 'encoded_decoded':
     encode_hints = True
@@ -436,6 +550,18 @@ def main(unused_argv):
     raise ValueError('Hint mode not in {encoded_decoded, decoded_only, none}.')
 
   train_lengths = [int(x) for x in FLAGS.train_lengths]
+  test_lengths = _resolve_test_lengths()
+  run_dir = _resolve_run_dir()
+  effective_profile = _effective_evaluation_profile()
+  logging.info('Run output directory: %s', run_dir)
+  if effective_profile != FLAGS.evaluation_profile:
+    logging.info(
+        'Using compatibility evaluation profile "%s" (requested "%s").',
+        effective_profile,
+        FLAGS.evaluation_profile,
+    )
+  collect_results_df = FLAGS.results_df or FLAGS.save_df
+  metric_rows = []
 
   rng = np.random.RandomState(FLAGS.seed)
   rng_key = jax.random.PRNGKey(rng.randint(2**32))
@@ -453,7 +579,7 @@ def main(unused_argv):
       train_lengths=train_lengths,
       algorithms=FLAGS.algorithms,
       val_lengths=[np.amax(train_lengths)],
-      test_lengths=[-1],
+      test_lengths=test_lengths,
       train_batch_size=FLAGS.batch_size,
   )
 
@@ -497,6 +623,7 @@ def main(unused_argv):
   # Training loop.
   best_score = -1.0
   current_train_items = [0] * len(FLAGS.algorithms)
+  train_loss_windows = [[] for _ in FLAGS.algorithms]
   step = 0
   next_eval = 0
   # Make sure scores improve on first step, but not overcome best score
@@ -535,6 +662,8 @@ def main(unused_argv):
         length_and_algo_idx = algo_idx
       cur_loss = train_model.feedback(rng_key, feedback, length_and_algo_idx)
       rng_key = new_rng_key
+      if collect_results_df:
+        train_loss_windows[algo_idx].append(float(cur_loss))
 
       if FLAGS.chunked_training:
         examples_in_chunk = np.sum(feedback.features.is_last).item()
@@ -558,7 +687,7 @@ def main(unused_argv):
         val_stats = multisol_dispatch.evaluate_with_registry(
             algorithm_name=FLAGS.algorithms[algo_idx],
             split='val',
-            profile=FLAGS.evaluation_profile,
+            profile=effective_profile,
             sampler=val_samplers[algo_idx],
             predict_fn=functools.partial(
                 eval_model.predict, algorithm_index=algo_idx),
@@ -568,10 +697,27 @@ def main(unused_argv):
             artifact_prefix=FLAGS.sampling_artifact_prefix,
             save_artifacts=False,
             fallback_eval_fn=collect_and_eval,
+            extension_kwargs=_extension_eval_kwargs(split='val', run_dir=run_dir),
+            report_sink=_sampling_report_sink(
+                split='val', profile=effective_profile, run_dir=run_dir),
         )
         logging.info('(val) algo %s step %d: %s',
                      FLAGS.algorithms[algo_idx], step, val_stats)
         val_scores[algo_idx] = val_stats['score']
+        if collect_results_df:
+          mean_train_loss = (
+              float(np.mean(train_loss_windows[algo_idx]))
+              if train_loss_windows[algo_idx]
+              else float('nan')
+          )
+          metric_rows.append({
+              'Algorithm': FLAGS.algorithms[algo_idx],
+              'Train KlDiv': mean_train_loss,
+              'Mean 1-abs(error)': float(val_stats['score']),
+              'Num Steps': int(step),
+              'Examples Seen': int(current_train_items[algo_idx]),
+          })
+          train_loss_windows[algo_idx] = []
 
       next_eval += FLAGS.eval_every
 
@@ -605,7 +751,7 @@ def main(unused_argv):
     test_stats = multisol_dispatch.evaluate_with_registry(
         algorithm_name=FLAGS.algorithms[algo_idx],
         split='test',
-        profile=FLAGS.evaluation_profile,
+        profile=effective_profile,
         sampler=test_samplers[algo_idx],
         predict_fn=functools.partial(eval_model.predict, algorithm_index=algo_idx),
         sample_count=test_sample_counts[algo_idx],
@@ -614,8 +760,22 @@ def main(unused_argv):
         artifact_prefix=FLAGS.sampling_artifact_prefix,
         save_artifacts=FLAGS.save_sampling_artifacts,
         fallback_eval_fn=collect_and_eval,
+        extension_kwargs=_extension_eval_kwargs(split='test', run_dir=run_dir),
+        report_sink=_sampling_report_sink(
+            split='test', profile=effective_profile, run_dir=run_dir),
     )
     logging.info('(test) algo %s : %s', FLAGS.algorithms[algo_idx], test_stats)
+
+  if FLAGS.save_df and collect_results_df:
+    multisol_reporting.save_csv_report(
+        metric_rows,
+        _default_results_df_filename(),
+        output_dir=run_dir,
+        timestamped=False,
+    )
+
+  if FLAGS.save_model_to_file:
+    eval_model.save_model_to_permanent_file(_default_model_output_path(run_dir))
 
   logging.info('Done!')
 

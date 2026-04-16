@@ -27,6 +27,7 @@ def evaluate_bf_multisol_batch(
     filename="bf_accuracy",
     vd_flag=False,
     NSE=100,
+    output_dir=".",
 ) -> Dict[str, float]:
   """Collect, evaluate, sample, validate and save Bellman-Ford results."""
   processed_samples = 0
@@ -57,6 +58,7 @@ def evaluate_bf_multisol_batch(
         outputs=outputs,
         preds=preds,
         nse=NSE,
+        output_dir=output_dir,
     )
   out = clrs.evaluate(outputs, preds)
 
