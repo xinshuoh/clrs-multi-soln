@@ -128,6 +128,29 @@ class CheckGraphsTest(absltest.TestCase):
 
         self.assertTrue(check_graphs.check_valid_bfsTree(graph_with_unreachable, pi, s=0))
 
+    def test_check_valid_bfsTree_rejects_inconsistent_layer_tiebreak(self):
+        """Reject trees that cannot come from one per-layer source order."""
+        # Layer 1 has nodes 1 and 2. Layer 2 has nodes 3 and 4 reachable from both.
+        # A single source ordering for layer 1 must pick the same first parent for
+        # both layer-2 nodes in this graph.
+        graph = np.array(
+            [
+                [0, 1, 1, 0, 0],
+                [1, 0, 0, 1, 1],
+                [1, 0, 0, 1, 1],
+                [0, 1, 1, 0, 0],
+                [0, 1, 1, 0, 0],
+            ]
+        )
+
+        valid_from_1 = np.array([0, 0, 0, 1, 1])
+        valid_from_2 = np.array([0, 0, 0, 2, 2])
+        invalid_mixed = np.array([0, 0, 0, 1, 2])
+
+        self.assertTrue(check_graphs.check_valid_bfsTree(graph, valid_from_1, s=0))
+        self.assertTrue(check_graphs.check_valid_bfsTree(graph, valid_from_2, s=0))
+        self.assertFalse(check_graphs.check_valid_bfsTree(graph, invalid_mixed, s=0))
+
     # -----------------------------------------------------
     # Regression Tests (from known issues)
     # -----------------------------------------------------

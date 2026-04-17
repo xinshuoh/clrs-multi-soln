@@ -304,34 +304,69 @@ assert check_valid_BFpaths(d,s,expect_d)
 ##################################################################################################################
 
 def check_valid_bfsTree(A, pi, s):
-    pi = copy.deepcopy(pi) # copy pi to avoid mutation
+    pi = copy.deepcopy(pi)  # copy pi to avoid mutation
 
     # pi should have same length as number of nodes in A
     assert len(pi) == A.shape[0], "pi length must match number of nodes in A"
+    pi = np.asarray(pi).astype(int)
+    n = A.shape[0]
 
-    # Compute shortest path distances from s in A
-    G = nx.from_numpy_array(A, create_using=nx.Graph)
+    if np.any(pi < 0) or np.any(pi >= n):
+        return False
+
+    # Compute shortest path distances from s in A.
+    # Use directed graph semantics to match BFS implementations that test A[u, v].
+    G = nx.from_numpy_array(A, create_using=nx.DiGraph)
     dist = nx.single_source_shortest_path_length(G, s)
 
     # Source node must be its own parent
     if pi[s] != s:
         return False
 
-    # Unreachable nodes must have self-parent
-    # Reachable nodes have valid parents and correct levels
-    for i in range(len(pi)):
+    # Unreachable nodes must have self-parent.
+    # Reachable nodes have valid parents and correct levels.
+    for i in range(n):
         if i == s:
-            continue  # already checked source node
-        if i not in dist:  # unreachable
+            continue
+        if i not in dist:
             if pi[i] != i:
                 return False
-        else:  # reachable
-            parent = pi[i]
-            if parent == i:  # self-parent not allowed for reachable nodes
+        else:
+            parent = int(pi[i])
+            if parent == i:
                 return False
-            if A[parent][i] == 0:  # no edge from parent to child
+            if A[parent, i] == 0:
                 return False
-            if dist[parent] != dist[i] - 1:  # parent must be one level above child
+            if parent not in dist or dist[parent] != dist[i] - 1:
                 return False
-            
+
+    # Enforce bfs_multi frontier-order consistency:
+    # At each level, there must exist a single source order over previous-level
+    # nodes that makes every chosen parent the first eligible source for its child.
+    levels = {}
+    for node, lvl in dist.items():
+        levels.setdefault(lvl, []).append(node)
+
+    max_level = max(levels.keys(), default=0)
+    for lvl in range(1, max_level + 1):
+        prev_level = levels.get(lvl - 1, [])
+        cur_level = levels.get(lvl, [])
+        if not cur_level:
+            continue
+
+        ordering_constraints = nx.DiGraph()
+        ordering_constraints.add_nodes_from(prev_level)
+
+        for child in cur_level:
+            parent = int(pi[child])
+            candidate_parents = [u for u in prev_level if A[u, child] != 0]
+            if parent not in candidate_parents:
+                return False
+            for other in candidate_parents:
+                if other != parent:
+                    ordering_constraints.add_edge(parent, other)
+
+        if not nx.is_directed_acyclic_graph(ordering_constraints):
+            return False
+
     return True
