@@ -739,6 +739,9 @@ def main(unused_argv):
     step += 1
     length_idx = (length_idx + 1) % len(train_lengths)
 
+  if FLAGS.train_steps == 0 and eval_model.params is None:
+    logging.info('No training steps requested, evaluation only. Initialising model...')
+    eval_model.init([next(t).features for t in val_samplers], FLAGS.seed + 1)
   logging.info('Restoring best model from checkpoint...')
   eval_model.restore_model('best.pkl', only_load_processor=False)
 
