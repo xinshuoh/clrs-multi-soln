@@ -2,7 +2,6 @@
 
 from typing import Tuple
 
-from clrs._src.multi_sol.data import samplers as multisol_data_samplers
 from clrs._src.samplers import Sampler
 
 
@@ -14,8 +13,14 @@ class DfsMultiSampler(Sampler):
       length: int,
       p: Tuple[float, ...] = (0.5,),
   ):
-    return multisol_data_samplers.sample_data_dfs_multi(
-        self, length=length, p=p)
+    graph = self._random_er_graph(
+        nb_nodes=length,
+        p=self._rng.choice(p),
+        directed=True,
+        acyclic=False,
+        weighted=False)
+    sub_seed = int(self._rng.randint(0, 2**31))
+    return [graph, sub_seed]
 
 
 class BfsMultiSampler(Sampler):
@@ -26,8 +31,15 @@ class BfsMultiSampler(Sampler):
       length: int,
       p: Tuple[float, ...] = (0.5,),
   ):
-    return multisol_data_samplers.sample_data_bfs_multi(
-        self, length=length, p=p)
+    graph = self._random_er_graph(
+        nb_nodes=length,
+        p=self._rng.choice(p),
+        directed=False,
+        acyclic=False,
+        weighted=False)
+    source_node = int(self._rng.choice(length))
+    sub_seed = int(self._rng.randint(0, 2**31))
+    return [graph, source_node, sub_seed]
 
 
 class BellmanFordMultiSampler(Sampler):
@@ -40,8 +52,17 @@ class BellmanFordMultiSampler(Sampler):
       low: int = 1,
       high: int = 3,
   ):
-    return multisol_data_samplers.sample_data_bellman_ford_multi(
-        self, length=length, p=p, low=low, high=high)
+    graph = self._few_weights_random_er_graph(
+        nb_nodes=length,
+        p=self._rng.choice(p),
+        directed=False,
+        acyclic=False,
+        weighted=True,
+        low=low,
+        high=high)
+    source_node = int(self._rng.choice(length))
+    sub_seed = int(self._rng.randint(0, 2**31))
+    return [graph, source_node, sub_seed]
 
 
 __all__ = (
