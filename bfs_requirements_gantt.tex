@@ -1,0 +1,58 @@
+% BFS multi-solution NAR Gantt chart (pgfgantt)
+% Usage:
+%   1) Add to preamble: \usepackage{pgfgantt}
+%   2) Include in document: \input{bfs_requirements_gantt.tex}
+
+\begin{figure}[htbp]
+\centering
+\begin{ganttchart}[
+  x unit=0.62cm,
+  y unit chart=0.7cm,
+  y unit title=0.8cm,
+  hgrid,
+  vgrid,
+  title label font=\bfseries\footnotesize,
+  bar label font=\footnotesize\raggedright,
+  group label font=\bfseries\footnotesize,
+  milestone label font=\footnotesize\itshape,
+  bar/.append style={fill=blue!25},
+  group/.append style={fill=blue!45},
+  milestone/.append style={fill=red!70},
+  link/.style={-latex, thick},
+  progress label text={},
+]{1}{16}
+\gantttitle{BFS Multi-Solution NAR Plan (Weeks)}{16} \\
+\gantttitlelist{1,...,16}{1} \\
+
+\ganttgroup{Core deliverables from requirements analysis}{1}{12} \\
+\ganttbar[name=t0]{R0. Interface and data-contract freeze}{1}{2} \\
+\ganttbar[name=t1]{R1. BFS data generation with randomized tie-breaking ($\tilde{P}$)}{2}{5} \\
+\ganttmilestone[name=m1]{Milestone: validated $\tilde{P}$ labels}{5} \\
+\ganttbar[name=t2]{R2a. MPNN output head for parent-distribution prediction ($\hat{P}$)}{5}{8} \\
+\ganttbar[name=t3]{R2b. KL objective + training-loop integration}{6}{9} \\
+\ganttbar[name=t4]{R3. Stochastic BFS sampling from $\hat{P}$}{9}{11} \\
+\ganttbar[name=t5]{R4. BFS validity and correctness evaluation module}{9}{12} \\
+\ganttmilestone[name=m2]{Milestone: end-to-end valid sample-and-evaluate pipeline}{12} \\
+
+\ganttgroup{Integration and proposal-aligned research execution}{12}{16} \\
+\ganttbar[name=t6]{I1. System integration and regression checks}{12}{13} \\
+\ganttbar[name=t7]{I2. Experiments, ablations, and metric analysis}{13}{15} \\
+\ganttbar[name=t8]{I3. Write-up and final packaging}{15}{16}
+
+% Dependencies
+\ganttlink{t0}{t1}
+\ganttlink{t1}{m1}
+\ganttlink{m1}{t2}
+\ganttlink{t2}{t3}
+\ganttlink{t3}{t4}
+\ganttlink{m1}{t5}
+\ganttlink{t4}{m2}
+\ganttlink{t5}{m2}
+\ganttlink{m2}{t6}
+\ganttlink{t6}{t7}
+\ganttlink{t7}{t8}
+\end{ganttchart}
+\caption{Implementation schedule for BFS multi-solution NAR deliverables and dependencies.}
+\label{fig:bfs-multisol-gantt}
+\end{figure}
+
