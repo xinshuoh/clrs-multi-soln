@@ -21,6 +21,8 @@ Use `dfs`/`bfs`/`bellman_ford` for base single-solution runs, and
 evaluation.
 By default each run now writes reports/CSVs/artifacts under
 `results/<timestamp>/`. Override with `--run_dir=/path/to/output`.
+By default checkpoints are also isolated per-run under
+`<run_dir>/checkpoints` unless `--checkpoint_path` is explicitly provided.
 
 Please run from inside this repo's outermost directory.
 
@@ -34,8 +36,20 @@ Please run from inside this repo's outermost directory.
 - `clrs/_src/multi_sol/` contains the modular multi-solution framework (core/data/training/sampling/validation/evaluation) used by `run.py` dispatch and compatibility wrappers.
   - Multi-solution extension code should target
     `specs.Type.POINTER_DISTRIBUTION`.
+  - Built-in multi algorithm wiring is declared via TOML manifests in
+    `clrs/_src/multi_sol/manifests/*.toml` (sampler/generator/evaluator).
+  - Multi-solution specs are defined in `clrs/_src/multi_sol/specs.py`
+    (`MULTI_SOL_SPECS`) and resolved by `algorithm_name`.
 - `results/viz.ipynb` lets you recreate the figures from `.csv` files
 - `clrs/_src/validate_distributions.py` does appendix stuff
+
+Adding a new multi-solution algorithm now requires:
+1. Implement generator + sampler + plugin evaluator modules.
+2. Add spec entry under `MULTI_SOL_SPECS` in `clrs/_src/multi_sol/specs.py`
+   using your algorithm name as key.
+3. Add one TOML manifest under `clrs/_src/multi_sol/manifests/`.
+4. Run `clrs._src.multi_sol.core.manifest_loader_test` and
+   `clrs._src.multi_sol.core.registry_test`.
 
 Tips navigating CLRS
 - Use an editor that quickly lets you find a function's definition with a keyboard shortcut, otherwise tracing prediction through baselines, nets, etc... is time consuming

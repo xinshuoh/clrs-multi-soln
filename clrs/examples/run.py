@@ -536,6 +536,16 @@ def _default_model_output_path(run_dir: str) -> str:
   return os.path.join(run_dir, 'eval_model.pkl')
 
 
+def _resolve_checkpoint_path(run_dir: str) -> str:
+  checkpoint_flag = FLAGS['checkpoint_path']
+  if checkpoint_flag.present:
+    checkpoint_path = FLAGS.checkpoint_path
+  else:
+    checkpoint_path = os.path.join(run_dir, 'checkpoints')
+  os.makedirs(checkpoint_path, exist_ok=True)
+  return checkpoint_path
+
+
 def main(unused_argv):
   if FLAGS.hint_mode == 'encoded_decoded':
     encode_hints = True
@@ -552,8 +562,10 @@ def main(unused_argv):
   train_lengths = [int(x) for x in FLAGS.train_lengths]
   test_lengths = _resolve_test_lengths()
   run_dir = _resolve_run_dir()
+  checkpoint_path = _resolve_checkpoint_path(run_dir)
   effective_profile = _effective_evaluation_profile()
   logging.info('Run output directory: %s', run_dir)
+  logging.info('Checkpoint directory: %s', checkpoint_path)
   if effective_profile != FLAGS.evaluation_profile:
     logging.info(
         'Using compatibility evaluation profile "%s" (requested "%s").',
@@ -598,7 +610,7 @@ def main(unused_argv):
       use_lstm=FLAGS.use_lstm,
       learning_rate=FLAGS.learning_rate,
       grad_clip_max_norm=FLAGS.grad_clip_max_norm,
-      checkpoint_path=FLAGS.checkpoint_path,
+      checkpoint_path=checkpoint_path,
       freeze_processor=FLAGS.freeze_processor,
       dropout_prob=FLAGS.dropout_prob,
       hint_teacher_forcing=FLAGS.hint_teacher_forcing,

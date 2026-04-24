@@ -1,7 +1,6 @@
 import numpy as np
-import clrs._src.dfs_sampling as dfs_sampling
-import clrs._src.algorithms.check_graphs as check_graphs
-from clrs._src.algorithms.BF_beamsearch import sample_beamsearch
+from clrs._src.multi_sol.sampling import dfs as dfs_sampling
+from clrs._src.multi_sol.validation import check_graphs
 
 
 def check_uniqueness_dfs(As, probMatrices, n_samples = 5, method = "upwards"):

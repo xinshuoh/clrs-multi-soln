@@ -7,8 +7,9 @@ from absl.testing import absltest
 
 from clrs._src import samplers
 from clrs._src import specs
-from clrs._src.multi_sol import catalog
-from clrs._src.multi_sol.algorithms import multi_graphs
+from clrs._src.multi_sol.algorithms.bellman_ford import generator as bf_generator
+from clrs._src.multi_sol.algorithms.bfs import generator as bfs_generator
+from clrs._src.multi_sol.algorithms.dfs import generator as dfs_generator
 from clrs._src.multi_sol.core import registry
 
 
@@ -53,48 +54,46 @@ class MultiSolRegistryTest(absltest.TestCase):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
       extension = registry.get_extension(name)
       self.assertIsNotNone(extension)
-      self.assertIsNotNone(extension.sampler_factory)
+      self.assertIsNotNone(extension.sampler_class)
 
-  def test_builtin_extensions_expose_algorithm_factories(self):
+  def test_builtin_extensions_expose_algorithms(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
       extension = registry.get_extension(name)
       self.assertIsNotNone(extension)
-      self.assertIsNotNone(extension.algorithm_factory)
+      self.assertIsNotNone(extension.algorithm)
 
-  def test_builtin_extensions_expose_spec_factories(self):
+  def test_builtin_extensions_expose_specs(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
       extension = registry.get_extension(name)
       self.assertIsNotNone(extension)
-      self.assertIsNotNone(extension.spec_factory)
-      self.assertIsNone(extension.spec_transformer)
+      self.assertIsNotNone(extension.spec)
 
   def test_multisol_samplers_are_injected_from_multisol_module(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
       extension = registry.get_extension(name)
       self.assertIsNotNone(extension)
-      sampler_class = extension.sampler_factory()
+      sampler_class = extension.sampler_class
       self.assertEqual(sampler_class.__module__, "clrs._src.multi_sol.samplers")
       self.assertIs(samplers.SAMPLERS[name], sampler_class)
 
   def test_multisol_algorithms_are_injected_from_multisol_module(self):
     expected_algorithms = {
-        "dfs_multi": multi_graphs.dfs_multi,
-        "bfs_multi": multi_graphs.bfs_multi,
-        "bellman_ford_multi": multi_graphs.bellman_ford_multi,
+        "dfs_multi": dfs_generator.dfs_multi,
+        "bfs_multi": bfs_generator.bfs_multi,
+        "bellman_ford_multi": bf_generator.bellman_ford_multi,
     }
     for name, expected_algorithm in expected_algorithms.items():
       extension = registry.get_extension(name)
       self.assertIsNotNone(extension)
-      algorithm_fn = extension.algorithm_factory()
-      self.assertEqual(
-          algorithm_fn.__module__, "clrs._src.multi_sol.algorithms.multi_graphs")
+      algorithm_fn = extension.algorithm
+      self.assertIn(".generator", algorithm_fn.__module__)
       self.assertIs(algorithm_fn, expected_algorithm)
 
   def test_build_sampler_uses_injected_multisol_sampler_classes(self):
     expected_algorithms = {
-        "dfs_multi": multi_graphs.dfs_multi,
-        "bfs_multi": multi_graphs.bfs_multi,
-        "bellman_ford_multi": multi_graphs.bellman_ford_multi,
+        "dfs_multi": dfs_generator.dfs_multi,
+        "bfs_multi": bfs_generator.bfs_multi,
+        "bellman_ford_multi": bf_generator.bellman_ford_multi,
     }
     for name, expected_algorithm in expected_algorithms.items():
       sampler, _ = samplers.build_sampler(name, num_samples=1, length=4, seed=0)
@@ -107,9 +106,8 @@ class MultiSolRegistryTest(absltest.TestCase):
       self.assertIsNotNone(extension)
       self.assertIsNotNone(extension.evaluator)
 
-  def test_registry_builtins_are_catalog_defined(self):
-    for extension in catalog.BUILTIN_EXTENSIONS:
-      self.assertIs(registry.get_extension(extension.algorithm_name), extension)
+  def test_registry_builtins_loaded_from_manifests(self):
+    self.assertGreaterEqual(len(registry.list_extensions()), 3)
 
 
 if __name__ == "__main__":

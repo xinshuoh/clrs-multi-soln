@@ -294,8 +294,8 @@ def build_sampler(
     raise NotImplementedError(f'No implementation of algorithm {name}.')
   spec = resolved_specs[name]
   extension = multisol_registry.get_extension(name)
-  if extension is not None and extension.algorithm_factory is not None:
-    algorithm = extension.algorithm_factory()
+  if extension is not None and extension.algorithm is not None:
+    algorithm = extension.algorithm
   else:
     algorithm = getattr(algorithms, name)
   sampler_class = SAMPLERS[name]
@@ -698,8 +698,8 @@ SAMPLERS = {
 
 for _extension_name in multisol_registry.list_extensions():
   _extension = multisol_registry.get_extension(_extension_name)
-  if _extension and _extension.sampler_factory is not None:
-    SAMPLERS[_extension_name] = _extension.sampler_factory()
+  if _extension and _extension.sampler_class is not None:
+    SAMPLERS[_extension_name] = _extension.sampler_class
 
 
 def _batch_io(traj_io: Trajectories) -> Trajectory:

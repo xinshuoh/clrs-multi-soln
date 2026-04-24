@@ -6,44 +6,51 @@ import dataclasses
 from typing import Any, Callable, Dict, Optional, Tuple
 
 
-SpecTransformer = Callable[[Dict[str, Any]], Dict[str, Any]]
 SpecFactory = Callable[[Dict[str, Dict[str, Any]]], Dict[str, Any]]
-SamplerFactory = Callable[[], type]
 Algorithm = Callable[..., Any]
-AlgorithmFactory = Callable[[], Algorithm]
 EvaluatorFn = Callable[..., dict]
+SpecProvider = Dict[str, Any] | SpecFactory
 
 
 @dataclasses.dataclass(frozen=True)
-class MultiSolAlgorithmExtension:
+class MultiSolExtensionDefinition:
   """Descriptor for one multi-solution algorithm extension."""
 
   algorithm_name: str
   base_algorithm_name: str
-  output_name: str
-  spec_transformer: Optional[SpecTransformer] = None
-  spec_factory: Optional[SpecFactory] = None
-  sampler_factory: Optional[SamplerFactory] = None
-  algorithm_factory: Optional[AlgorithmFactory] = None
+  spec: SpecProvider
+  sampler_class: Optional[type] = None
+  algorithm: Optional[Algorithm] = None
   evaluator: Optional[EvaluatorFn] = None
 
 
-_EXTENSIONS: Dict[str, MultiSolAlgorithmExtension] = {}
+# Backward-compatible alias for previous name.
+MultiSolAlgorithmExtension = MultiSolExtensionDefinition
+
+
+_EXTENSIONS: Dict[str, MultiSolExtensionDefinition] = {}
+_BUILTINS_REGISTERED = False
 
 
 def ensure_builtin_extensions_registered() -> None:
+  global _BUILTINS_REGISTERED
+  if _BUILTINS_REGISTERED:
+    return
   # Lazy import to avoid circular dependency at module import time.
-  from clrs._src.multi_sol.core import extensions as _extensions  # noqa: F401
+  from clrs._src.multi_sol.core import manifest_loader
+  for extension in manifest_loader.load_manifest_extensions():
+    register_extension(extension)
+  _BUILTINS_REGISTERED = True
 
 
-def register_extension(extension: MultiSolAlgorithmExtension) -> None:
+def register_extension(extension: MultiSolExtensionDefinition) -> None:
   name = extension.algorithm_name
   if name in _EXTENSIONS:
     raise ValueError(f"Extension already registered for {name}.")
   _EXTENSIONS[name] = extension
 
 
-def get_extension(algorithm_name: str) -> Optional[MultiSolAlgorithmExtension]:
+def get_extension(algorithm_name: str) -> Optional[MultiSolExtensionDefinition]:
   ensure_builtin_extensions_registered()
   return _EXTENSIONS.get(algorithm_name)
 
@@ -58,13 +65,10 @@ def build_overlay_specs(base_specs_map) -> Dict[str, Dict[str, Any]]:
   ensure_builtin_extensions_registered()
   overlays: Dict[str, Dict[str, Any]] = {}
   for extension in _EXTENSIONS.values():
-    if extension.spec_factory is not None:
-      overlays[extension.algorithm_name] = extension.spec_factory(base_specs_map)
-      continue
-    if extension.spec_transformer is None:
-      continue
-    base_spec = base_specs_map[extension.base_algorithm_name]
-    overlays[extension.algorithm_name] = extension.spec_transformer(base_spec)
+    if callable(extension.spec):
+      overlays[extension.algorithm_name] = extension.spec(base_specs_map)
+    else:
+      overlays[extension.algorithm_name] = dict(extension.spec)
   return overlays
 
 

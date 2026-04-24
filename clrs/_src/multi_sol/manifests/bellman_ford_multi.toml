@@ -1,0 +1,11 @@
+algorithm_name = "bellman_ford_multi"
+base_algorithm_name = "bellman_ford"
+
+[sampler]
+class = "clrs._src.multi_sol.samplers:BellmanFordMultiSampler"
+
+[algorithm]
+callable = "clrs._src.multi_sol.algorithms.bellman_ford.generator:bellman_ford_multi"
+
+[evaluator]
+callable = "clrs._src.multi_sol.algorithms.bellman_ford.plugin:evaluate_bf_multisol_batch"

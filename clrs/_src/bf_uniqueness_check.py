@@ -1,7 +1,6 @@
 import numpy as np
-import clrs._src.algorithms.BF_beamsearch as BF_beamsearch
-import clrs._src.algorithms.check_graphs as check_graphs
-import clrs._src.dfs_sampling as dfs_sampling
+from clrs._src.multi_sol.sampling import bellman_ford as bf_sampling
+from clrs._src.multi_sol.validation import check_graphs
 
 def check_uniqueness_bf(probMatrices, source_nodes, As, n_samples = 5, method = "beam",values = "model"):
     uniques = []
@@ -12,9 +11,9 @@ def check_uniqueness_bf(probMatrices, source_nodes, As, n_samples = 5, method = 
     # every index corresponds to the probmatrix we are sampling from
     #breakpoint()
     if method == "beam":
-        samples = np.array([BF_beamsearch.sample_beamsearch(As, source_nodes,probMatrices) for j in range(n_samples)])
+        samples = np.array([bf_sampling.sample_beamsearch(As, source_nodes,probMatrices) for j in range(n_samples)])
     elif method == "greedy":
-        samples = np.array([BF_beamsearch.sample_greedysearch(As, source_nodes,probMatrices)for j in range(n_samples)])
+        samples = np.array([bf_sampling.sample_greedysearch(As, source_nodes,probMatrices)for j in range(n_samples)])
     else:
         raise ValueError("Invalid Sampling method")
     #probMatrices_format = dfs_sampling.extract_probMatrices(probMatrices)

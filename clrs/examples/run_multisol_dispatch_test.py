@@ -354,6 +354,14 @@ class RunMultisolDispatchTest(absltest.TestCase):
     self.assertEqual(defaults["NSE"], 25)
     self.assertIsNone(defaults["test_length"])
 
+  def test_run_source_resolves_checkpoint_default_under_run_dir(self):
+    run_path = pathlib.Path(__file__).resolve().with_name("run.py")
+    source = run_path.read_text(encoding="utf-8")
+    self.assertIn("def _resolve_checkpoint_path", source)
+    self.assertIn("checkpoint_flag = FLAGS['checkpoint_path']", source)
+    self.assertIn("if checkpoint_flag.present", source)
+    self.assertIn("os.path.join(run_dir, 'checkpoints')", source)
+
 
 if __name__ == "__main__":
   absltest.main()
