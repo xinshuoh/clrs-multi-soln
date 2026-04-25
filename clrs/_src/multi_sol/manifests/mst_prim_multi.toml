@@ -1,0 +1,11 @@
+algorithm_name = "mst_prim_multi"
+base_algorithm_name = "mst_prim"
+
+[sampler]
+class = "clrs._src.multi_sol.samplers:MSTPrimMultiSampler"
+
+[algorithm]
+callable = "clrs._src.multi_sol.algorithms.mst_prim.generator:mst_prim_multi"
+
+[evaluator]
+callable = "clrs._src.multi_sol.algorithms.mst_prim.plugin:evaluate_mst_prim_multisol_batch"

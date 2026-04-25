@@ -5,10 +5,11 @@ from __future__ import annotations
 import numpy as np
 
 from clrs._src.multi_sol.sampling import dfs as dfs_sampling
+from clrs._src.multi_sol.data.distribution import extract_probability_matrices
 
 
 def sample_beamsearch(adjacencies, source_nodes, outs_or_preds):
-  prob_matrix_list = dfs_sampling.extract_probMatrices(outs_or_preds)
+  prob_matrix_list = extract_probability_matrices(outs_or_preds)
   pi_trees = []
   for ix, prob_matrix in enumerate(prob_matrix_list):
     adjacency = adjacencies[ix]
@@ -65,7 +66,7 @@ def BF_beamsearch(adjacency, source, prob_matrix, beamwidth=3):
 
 
 def sample_greedysearch(adjacencies, source_nodes, outs_or_preds):
-  prob_matrix_list = dfs_sampling.extract_probMatrices(outs_or_preds)
+  prob_matrix_list = extract_probability_matrices(outs_or_preds)
   pi_trees = []
   for ix, prob_matrix in enumerate(prob_matrix_list):
     adjacency = adjacencies[ix]

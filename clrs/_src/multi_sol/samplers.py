@@ -64,9 +64,13 @@ class BellmanFordMultiSampler(Sampler):
     sub_seed = int(self._rng.randint(0, 2**31))
     return [graph, source_node, sub_seed]
 
+MSTPrimSampler = BellmanFordMultiSampler
+MSTPrimMultiSampler = BellmanFordMultiSampler
 
 __all__ = (
     "DfsMultiSampler",
     "BfsMultiSampler",
     "BellmanFordMultiSampler",
+    "MSTPrimSampler",
+    "MSTPrimMultiSampler",
 )
