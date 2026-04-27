@@ -93,6 +93,14 @@ class BellmanFordPluginTest(unittest.TestCase):
         "clrs._src.multi_sol.evaluation.distribution_validation")
     dist_validation_module.run_bf_distribution_validation = (
         lambda **kwargs: None)
+    dist_validation_module.evaluate_mixed_sampling_methods = (
+        lambda **kwargs: {
+            "result_dict": {"Beam_Model_Uniques": [1.0]},
+            "scalar_metrics": {"Beam_Model_Uniqueness": 1.0},
+            "curves": [{"Samples": 1}],
+        })
+    dist_validation_module.save_sampling_curve_artifacts = (
+        lambda *args, **kwargs: None)
     self._install_module(
         "clrs._src.multi_sol.evaluation.distribution_validation",
         dist_validation_module)
@@ -151,9 +159,17 @@ class BellmanFordPluginTest(unittest.TestCase):
   def test_distribution_validation_runs_when_enabled(self):
     plugin = self._load_plugin_with_stubs()
 
-    captured_validation = {}
-    plugin.distribution_validation.run_bf_distribution_validation = (
-        lambda **kwargs: captured_validation.update(kwargs))
+    captured_sampling = {}
+    plugin.distribution_validation.evaluate_mixed_sampling_methods = (
+        lambda **kwargs: captured_sampling.update(kwargs) or {
+            "result_dict": {"Beam_Model_Uniques": [1.0]},
+            "scalar_metrics": {"Beam_Model_Uniqueness": 1.0},
+            "curves": [{"Samples": 1}],
+        })
+    captured_curves = {}
+    plugin.distribution_validation.save_sampling_curve_artifacts = (
+        lambda curves, **kwargs: captured_curves.update(
+            {"curves": curves, **kwargs}))
 
     saved = {}
 
@@ -196,10 +212,11 @@ class BellmanFordPluginTest(unittest.TestCase):
     self.assertEqual(saved["filename"], "bf_case_BF")
     self.assertEqual(out["score"], 0.77)
     self.assertEqual(out["phase"], "ok")
-    self.assertEqual(captured_validation["nse"], 37)
-    self.assertEqual(captured_validation["output_dir"], "results/run-9")
-    np.testing.assert_array_equal(captured_validation["adjacency"], adjacency)
-    np.testing.assert_array_equal(captured_validation["source_nodes"],
+    self.assertEqual(captured_sampling["n_samples"], 37)
+    self.assertEqual(captured_curves["output_dir"], "results/run-9")
+    self.assertEqual(captured_curves["filename"], "bf_case_BF")
+    np.testing.assert_array_equal(captured_sampling["adjacency"], adjacency)
+    np.testing.assert_array_equal(captured_sampling["source_nodes"],
                                   np.asarray([0]))
 
 

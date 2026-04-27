@@ -12,7 +12,6 @@ from clrs._src.multi_sol.evaluation import reports
 from clrs._src.multi_sol.evaluation.runners import evaluate_sampling_pair
 from clrs._src.multi_sol.sampling import dfs as dfs_sampling
 from clrs._src.multi_sol.validation import dfs as dfs_validation
-from clrs._src import dfs_uniqueness_check
 
 
 def evaluate_dfs_multisol_batch(
@@ -46,16 +45,11 @@ def evaluate_dfs_multisol_batch(
   outputs = concat_tree(outputs, axis=0)
   adjacency = concat_tree(adjacency_batches, axis=0)
   preds = concat_tree(pred_batches, axis=0)
-  if vd_flag:
-    distribution_validation.run_dfs_distribution_validation(
-        adjacency=adjacency,
-        outputs=outputs,
-        pred_batches=pred_batches,
-        nse=NSE,
-        output_dir=output_dir,
-    )
   source_nodes = [0] * len(adjacency)
   out = clrs.evaluate(outputs, preds)
+
+  def validate_fn(adjacency_item, parent_tree, _source):
+    return dfs_validation.check_valid_dfsTree(adjacency_item, parent_tree)
 
   random_sampling = evaluate_sampling_pair(
       model_sample_fn=lambda data: dfs_sampling.sample_random_list(data),
@@ -64,7 +58,7 @@ def evaluate_dfs_multisol_batch(
       true_input=outputs,
       adjacency=adjacency,
       source_nodes=source_nodes,
-      validate_fn=dfs_validation.check_valid_dfs_tree,
+      validate_fn=validate_fn,
   )
   argmax_sampling = evaluate_sampling_pair(
       model_sample_fn=lambda data: dfs_sampling.sample_argmax_listofdict(data),
@@ -73,7 +67,7 @@ def evaluate_dfs_multisol_batch(
       true_input=outputs,
       adjacency=adjacency,
       source_nodes=source_nodes,
-      validate_fn=dfs_validation.check_valid_dfs_tree,
+      validate_fn=validate_fn,
   )
   upwards_sampling = evaluate_sampling_pair(
       model_sample_fn=lambda data: dfs_sampling.sample_upwards(data),
@@ -82,7 +76,7 @@ def evaluate_dfs_multisol_batch(
       true_input=outputs,
       adjacency=adjacency,
       source_nodes=source_nodes,
-      validate_fn=dfs_validation.check_valid_dfs_tree,
+      validate_fn=validate_fn,
   )
   alt_upwards_sampling = evaluate_sampling_pair(
       model_sample_fn=lambda data: dfs_sampling.sample_altUpwards(data),
@@ -91,7 +85,7 @@ def evaluate_dfs_multisol_batch(
       true_input=outputs,
       adjacency=adjacency,
       source_nodes=source_nodes,
-      validate_fn=dfs_validation.check_valid_dfs_tree,
+      validate_fn=validate_fn,
   )
 
   result_dict = reports.build_dfs_result_dict(
@@ -101,33 +95,39 @@ def evaluate_dfs_multisol_batch(
       upwards=upwards_sampling,
       alt_upwards=alt_upwards_sampling,
   )
-  model_up_uniques, model_up_valids_uniques, model_up_valids = (
-      dfs_uniqueness_check.check_uniqueness_dfs(adjacency, [preds]))
-  true_up_uniques, true_up_valids_uniques, true_up_valids = (
-      dfs_uniqueness_check.check_uniqueness_dfs(adjacency, outputs))
-  model_alt_uniques, model_alt_valids_uniques, model_alt_valids = (
-      dfs_uniqueness_check.check_uniqueness_dfs(
-          adjacency, [preds], method="altupwards"))
-  true_alt_uniques, true_alt_valids_uniques, true_alt_valids = (
-      dfs_uniqueness_check.check_uniqueness_dfs(
-          adjacency, outputs, method="altupwards"))
-  result_dict.update({
-      "Upwards_Model_Uniques": model_up_uniques,
-      "Upwards_Model_Valids_Uniques": model_up_valids_uniques,
-      "Upwards_Model_Valids": model_up_valids,
-      "Upwards_True_Uniques": true_up_uniques,
-      "Upwards_True_Valids_Uniques": true_up_valids_uniques,
-      "Upwards_True_Valids": true_up_valids,
-      "altUpwards_Model_Uniques": model_alt_uniques,
-      "altUpwards_Model_Valids_Uniques": model_alt_valids_uniques,
-      "altUpwards_Model_Valids": model_alt_valids,
-      "altUpwards_True_Uniques": true_alt_uniques,
-      "altUpwards_True_Valids_Uniques": true_alt_valids_uniques,
-      "altUpwards_True_Valids": true_alt_valids,
-  })
+  sampling_methods = {
+      "Argmax": lambda data: dfs_sampling.sample_argmax_listofdict(data),
+      "Random": lambda data: dfs_sampling.sample_random_list(data),
+      "Upwards": lambda data: dfs_sampling.sample_upwards(data),
+      "altUpwards": lambda data: dfs_sampling.sample_altUpwards(data),
+  }
+  true_sampling_methods = {
+      "Argmax": lambda data: dfs_sampling.sample_argmax_listofdatapoint(data),
+      "Random": lambda data: dfs_sampling.sample_random_list(data),
+      "Upwards": lambda data: dfs_sampling.sample_upwards(data),
+      "altUpwards": lambda data: dfs_sampling.sample_altUpwards(data),
+  }
+  sampling_summary = distribution_validation.evaluate_mixed_sampling_methods(
+      model_methods=sampling_methods,
+      true_methods=true_sampling_methods,
+      model_input=[preds],
+      true_input=outputs,
+      adjacency=adjacency,
+      source_nodes=source_nodes,
+      validate_fn=validate_fn,
+      n_samples=NSE,
+  )
+  result_dict.update(sampling_summary["result_dict"])
+  if vd_flag:
+    distribution_validation.save_sampling_curve_artifacts(
+        sampling_summary["curves"],
+        filename=f"{filename}_DFS",
+        output_dir=output_dir,
+    )
   report_sink = save_results_fn or reporting.discard_report
   report_sink(result_dict, f"{filename}_DFS")
 
+  out.update(sampling_summary["scalar_metrics"])
   if extras:
     out.update(extras)
   return {k: _unpack(v) for k, v in out.items()}

@@ -7,6 +7,7 @@ import jax
 import numpy as np
 
 from clrs._src.multi_sol.data.adapters import concat_tree
+from clrs._src.multi_sol.evaluation import distribution_validation
 from clrs._src.multi_sol.evaluation import reporting
 from clrs._src.multi_sol.evaluation import reports
 from clrs._src.multi_sol.evaluation.runners import evaluate_sampling_pair
@@ -49,7 +50,6 @@ def evaluate_mst_prim_multisol_batch(
   adjacency = concat_tree(adjacency_batches, axis=0)
   source_nodes = concat_tree(source_batches, axis=0).astype(int)
   preds = concat_tree(pred_batches, axis=0)
-  del vd_flag, NSE, output_dir
   out = clrs.evaluate(outputs, preds)
 
   random_sampling = evaluate_sampling_pair(
@@ -102,73 +102,46 @@ def evaluate_mst_prim_multisol_batch(
       tree=tree_sampling,
       greedy=greedy_sampling,
   )
-  model_tree_uniques, model_tree_valids_uniques, model_tree_valids = (
-      _sampling_uniqueness(
-          [preds], adjacency, source_nodes, mst_sampling.sample_mst_prim_tree))
-  true_tree_uniques, true_tree_valids_uniques, true_tree_valids = (
-      _sampling_uniqueness(
-          outputs, adjacency, source_nodes, mst_sampling.sample_mst_prim_tree))
-  model_greedy_uniques, model_greedy_valids_uniques, model_greedy_valids = (
-      _sampling_uniqueness(
-          [preds], adjacency, source_nodes, mst_sampling.sample_mst_prim_greedy))
-  true_greedy_uniques, true_greedy_valids_uniques, true_greedy_valids = (
-      _sampling_uniqueness(
-          outputs, adjacency, source_nodes, mst_sampling.sample_mst_prim_greedy))
-  result_dict.update({
-      "Tree_Model_Uniques": model_tree_uniques,
-      "Tree_Model_Valids_Uniques": model_tree_valids_uniques,
-      "Tree_Model_Valids": model_tree_valids,
-      "Tree_True_Uniques": true_tree_uniques,
-      "Tree_True_Valids_Uniques": true_tree_valids_uniques,
-      "Tree_True_Valids": true_tree_valids,
-      "Greedy_Model_Uniques": model_greedy_uniques,
-      "Greedy_Model_Valids_Uniques": model_greedy_valids_uniques,
-      "Greedy_Model_Valids": model_greedy_valids,
-      "Greedy_True_Uniques": true_greedy_uniques,
-      "Greedy_True_Valids_Uniques": true_greedy_valids_uniques,
-      "Greedy_True_Valids": true_greedy_valids,
-  })
+  model_methods = {
+      "Argmax": lambda data: dfs_sampling.sample_argmax_listofdict(data),
+      "Random": lambda data: dfs_sampling.sample_random_list(data),
+      "Tree": lambda data: mst_sampling.sample_mst_prim_tree(
+          adjacency, source_nodes, data),
+      "Greedy": lambda data: mst_sampling.sample_mst_prim_greedy(
+          adjacency, source_nodes, data),
+  }
+  true_methods = {
+      "Argmax": lambda data: dfs_sampling.sample_argmax_listofdatapoint(data),
+      "Random": lambda data: dfs_sampling.sample_random_list(data),
+      "Tree": lambda data: mst_sampling.sample_mst_prim_tree(
+          adjacency, source_nodes, data),
+      "Greedy": lambda data: mst_sampling.sample_mst_prim_greedy(
+          adjacency, source_nodes, data),
+  }
+  sampling_summary = distribution_validation.evaluate_mixed_sampling_methods(
+      model_methods=model_methods,
+      true_methods=true_methods,
+      model_input=[preds],
+      true_input=outputs,
+      adjacency=adjacency,
+      source_nodes=source_nodes,
+      validate_fn=mst_validation.check_valid_mst_prim_tree,
+      n_samples=NSE,
+  )
+  result_dict.update(sampling_summary["result_dict"])
+  if vd_flag:
+    distribution_validation.save_sampling_curve_artifacts(
+        sampling_summary["curves"],
+        filename=f"{filename}_MSTPrim",
+        output_dir=output_dir,
+    )
   report_sink = save_results_fn or reporting.discard_report
   report_sink(result_dict, f"{filename}_MSTPrim")
 
+  out.update(sampling_summary["scalar_metrics"])
   if extras:
     out.update(extras)
   return {k: _unpack(v) for k, v in out.items()}
-
-
-def _sampling_uniqueness(
-    outs_or_preds,
-    adjacency,
-    source_nodes,
-    sample_fn,
-    n_samples=5,
-):
-  samples = np.asarray([
-      sample_fn(adjacency, source_nodes, outs_or_preds)
-      for _ in range(n_samples)
-  ])
-  uniques = []
-  valids_uniques = []
-  valids = []
-  for i in range(len(adjacency)):
-    samples_for_graph = samples[:, i]
-    unique_trees = [
-        list(item) for item in set(tuple(row) for row in samples_for_graph)
-    ]
-    uniques.append(len(unique_trees) / n_samples)
-    unique_valids = [
-        mst_validation.check_valid_mst_prim_tree(
-            adjacency[i], tree, int(source_nodes[i]))
-        for tree in unique_trees
-    ]
-    valids_uniques.append(sum(unique_valids) / len(unique_trees))
-    sample_valids = [
-        mst_validation.check_valid_mst_prim_tree(
-            adjacency[i], tree, int(source_nodes[i]))
-        for tree in samples_for_graph
-    ]
-    valids.append(sum(sample_valids) / n_samples)
-  return uniques, valids_uniques, valids
 
 
 def _unpack(v):

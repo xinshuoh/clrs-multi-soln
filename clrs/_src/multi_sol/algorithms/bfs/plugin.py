@@ -9,6 +9,7 @@ import numpy as np
 
 from clrs._src.multi_sol.data.adapters import concat_tree
 from clrs._src.multi_sol.data.adapters import extract_bfs_graph_and_source
+from clrs._src.multi_sol.evaluation import distribution_validation
 from clrs._src.multi_sol.evaluation import reporting
 from clrs._src.multi_sol.evaluation import reports
 from clrs._src.multi_sol.evaluation.runners import evaluate_sampling_pair
@@ -25,6 +26,9 @@ def evaluate_bfs_multisol_batch(
     extras,
     save_results_fn=None,
     filename="bfs_accuracy",
+    vd_flag=False,
+    NSE=100,
+    output_dir=".",
 ) -> Dict[str, float]:
   """Collect, evaluate, sample, validate and save BFS multi-solution results."""
   processed_samples = 0
@@ -100,9 +104,33 @@ def evaluate_bfs_multisol_batch(
       prim=prim,
       beam=beam,
   )
+  sampling_methods = {
+      "Categorical": lambda data: bfs_sampling.sample_bfs_categorical(data),
+      "Random": lambda data: dfs_sampling.sample_random_list(data),
+      "Prim": lambda data: bfs_sampling.sample_bfs_prim(data, source_nodes),
+      "Beam": lambda data: bfs_sampling.sample_bfs_beam(
+          data, source_nodes, beam_width=3),
+  }
+  sampling_summary = distribution_validation.evaluate_sampling_methods(
+      methods=sampling_methods,
+      model_input=[preds],
+      true_input=outputs,
+      adjacency=adjacency,
+      source_nodes=source_nodes,
+      validate_fn=bfs_validation.check_valid_bfs_tree,
+      n_samples=NSE,
+  )
+  result_dict.update(sampling_summary["result_dict"])
+  if vd_flag:
+    distribution_validation.save_sampling_curve_artifacts(
+        sampling_summary["curves"],
+        filename=f"{filename}_BFS",
+        output_dir=output_dir,
+    )
   report_sink = save_results_fn or reporting.discard_report
   report_sink(result_dict, f"{filename}_BFS")
 
+  out.update(sampling_summary["scalar_metrics"])
   if extras:
     out.update(copy.deepcopy(extras))
   return {k: _unpack(v) for k, v in out.items()}

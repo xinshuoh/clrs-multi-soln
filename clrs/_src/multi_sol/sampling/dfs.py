@@ -62,28 +62,27 @@ chooseUniformly = choose_uniformly
 
 def single_sample_upwards(prob_matrix):
   """Sample one parent tree by repeatedly sampling upwards from leafy nodes."""
-  prob_matrix = np.array(prob_matrix, copy=True)
-  leafiness = np.asarray(leafiness_sort(prob_matrix))
-  pi = np.full(len(prob_matrix), np.inf)
-  while sum(leafiness) > -len(leafiness):
-    altered_prob_matrix = row_wise_prob(prob_matrix)
-    leaf = leafiness[leafiness != -1][0]
-    parent = choose_uniformly(altered_prob_matrix[leaf])
-    pi[leaf] = parent
-    leafiness[leaf] = -1
-    leafiness[parent] = -1
-    altered_prob_matrix[:, leaf] = 0
+  prob_matrix = row_wise_prob(np.asarray(prob_matrix))
+  num_nodes = len(prob_matrix)
+  pi = np.full(num_nodes, -1, dtype=int)
 
-    while pi[parent] == np.inf:
-      leaf = parent
-      parent = choose_uniformly(altered_prob_matrix[leaf])
-      pi[leaf] = parent
-      leafiness[leaf] = -1
-      leafiness[parent] = -1
-      altered_prob_matrix[:, leaf] = 0
+  for start in leafiness_sort(prob_matrix):
+    node = int(start)
+    steps = 0
+    while pi[node] == -1 and steps <= num_nodes:
+      parent = choose_uniformly(prob_matrix[node])
+      if parent is None:
+        parent = node
+      parent = int(parent)
+      pi[node] = parent
+      node = parent
+      steps += 1
 
-  if sum(np.isin(pi, np.inf)) > 0:
-    raise ValueError("Leaf with no parent")
+    if steps > num_nodes and 0 <= node < num_nodes and pi[node] == -1:
+      pi[node] = node
+
+  missing = np.where(pi == -1)[0]
+  pi[missing] = missing
   return pi
 
 

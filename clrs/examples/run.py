@@ -54,6 +54,11 @@ flags.DEFINE_integer('length_needle', -8,
                      'A value of 0 means use always 1/4 of the length of '
                      'the haystack (the default sampler behavior).')
 flags.DEFINE_integer('seed', 42, 'Random seed to set')
+flags.DEFINE_list(
+    'seeds',
+    [],
+    'Optional comma-separated seeds for repeated runs. If set, overrides '
+    '--seed and writes aggregate mean/std test metrics to the base run_dir.')
 
 flags.DEFINE_boolean('random_pos', True,
                      'Randomize the pos input common to all algos.')
@@ -174,7 +179,7 @@ flags.DEFINE_string(
 flags.DEFINE_boolean(
     'validate_distributions',
     False,
-    'Enable legacy distribution-validation side effects in extension evaluators.')
+    'Save multi-solution uniqueness and edge-reuse curve artifacts.')
 flags.DEFINE_integer(
     'NSE',
     25,
@@ -546,7 +551,74 @@ def _resolve_checkpoint_path(run_dir: str) -> str:
   return checkpoint_path
 
 
+def _resolve_seed_list() -> List[int]:
+  if FLAGS.seeds:
+    return [int(seed) for seed in FLAGS.seeds]
+  return [FLAGS.seed]
+
+
+def _seed_run_dir(base_run_dir: str, seed: int, multi_seed: bool) -> str:
+  if not multi_seed:
+    return base_run_dir
+  run_dir = os.path.join(base_run_dir, f'seed_{seed}')
+  os.makedirs(run_dir, exist_ok=True)
+  return run_dir
+
+
+def _save_seed_summary(test_rows, run_dir: str) -> None:
+  if not test_rows:
+    return
+
+  multisol_reporting.save_csv_report(
+      test_rows,
+      'seed-test-results',
+      output_dir=run_dir,
+      timestamped=False,
+  )
+
+  numeric_keys = sorted({
+      key
+      for row in test_rows
+      for key, value in row.items()
+      if key not in ('Algorithm', 'Seed') and isinstance(value, (int, float))
+  })
+  algorithms = sorted({row['Algorithm'] for row in test_rows})
+  summary_rows = []
+  for algorithm in algorithms:
+    algo_rows = [row for row in test_rows if row['Algorithm'] == algorithm]
+    for metric in numeric_keys:
+      values = [row[metric] for row in algo_rows if metric in row]
+      if not values:
+        continue
+      summary_rows.append({
+          'Algorithm': algorithm,
+          'Metric': metric,
+          'Mean': float(np.mean(values)),
+          'Std': float(np.std(values, ddof=1)) if len(values) > 1 else 0.0,
+          'Num Seeds': len(values),
+      })
+  multisol_reporting.save_csv_report(
+      summary_rows,
+      'seed-test-summary',
+      output_dir=run_dir,
+      timestamped=False,
+  )
+
+
 def main(unused_argv):
+  base_run_dir = _resolve_run_dir()
+  seeds = _resolve_seed_list()
+  all_test_rows = []
+  for seed in seeds:
+    run_dir = _seed_run_dir(base_run_dir, seed, len(seeds) > 1)
+    logging.info('Starting run for seed %d in %s', seed, run_dir)
+    all_test_rows.extend(_run_single_seed(seed=seed, run_dir=run_dir))
+  if len(seeds) > 1:
+    _save_seed_summary(all_test_rows, base_run_dir)
+  logging.info('Done!')
+
+
+def _run_single_seed(seed: int, run_dir: str):
   if FLAGS.hint_mode == 'encoded_decoded':
     encode_hints = True
     decode_hints = True
@@ -561,7 +633,6 @@ def main(unused_argv):
 
   train_lengths = [int(x) for x in FLAGS.train_lengths]
   test_lengths = _resolve_test_lengths()
-  run_dir = _resolve_run_dir()
   checkpoint_path = _resolve_checkpoint_path(run_dir)
   effective_profile = _effective_evaluation_profile()
   logging.info('Run output directory: %s', run_dir)
@@ -575,7 +646,7 @@ def main(unused_argv):
   collect_results_df = FLAGS.results_df or FLAGS.save_df
   metric_rows = []
 
-  rng = np.random.RandomState(FLAGS.seed)
+  rng = np.random.RandomState(seed)
   rng_key = jax.random.PRNGKey(rng.randint(2**32))
 
   # Create samplers
@@ -642,6 +713,7 @@ def main(unused_argv):
   # until all algos have had at least one evaluation.
   val_scores = [-99999.9] * len(FLAGS.algorithms)
   length_idx = 0
+  saved_best_checkpoint = False
 
   while step < FLAGS.train_steps:
     feedback_list = [next(t) for t in train_samplers]
@@ -656,9 +728,9 @@ def main(unused_argv):
         all_length_features = [all_features] + [
             [next(t).features for t in train_samplers]
             for _ in range(len(train_lengths))]
-        train_model.init(all_length_features[:-1], FLAGS.seed + 1)
+        train_model.init(all_length_features[:-1], seed + 1)
       else:
-        train_model.init(all_features, FLAGS.seed + 1)
+        train_model.init(all_features, seed + 1)
 
     # Training step.
     for algo_idx in range(len(train_samplers)):
@@ -724,6 +796,7 @@ def main(unused_argv):
           )
           metric_rows.append({
               'Algorithm': FLAGS.algorithms[algo_idx],
+              'Seed': int(seed),
               'Train KlDiv': mean_train_loss,
               'Mean 1-abs(error)': float(val_stats['score']),
               'Num Steps': int(step),
@@ -745,6 +818,7 @@ def main(unused_argv):
         best_score = sum(val_scores)
         logging.info('Checkpointing best model, %s', msg)
         train_model.save_model('best.pkl')
+        saved_best_checkpoint = True
       else:
         logging.info('Not saving new best model, %s', msg)
 
@@ -753,10 +827,12 @@ def main(unused_argv):
 
   if FLAGS.train_steps == 0 and eval_model.params is None:
     logging.info('No training steps requested, evaluation only. Initialising model...')
-    eval_model.init([next(t).features for t in val_samplers], FLAGS.seed + 1)
-  logging.info('Restoring best model from checkpoint...')
-  eval_model.restore_model('best.pkl', only_load_processor=False)
+    eval_model.init([next(t).features for t in val_samplers], seed + 1)
+  if saved_best_checkpoint:
+    logging.info('Restoring best model from checkpoint...')
+    eval_model.restore_model('best.pkl', only_load_processor=False)
 
+  test_rows = []
   for algo_idx in range(len(train_samplers)):
     common_extras = {'examples_seen': current_train_items[algo_idx],
                      'step': step,
@@ -780,6 +856,14 @@ def main(unused_argv):
             split='test', profile=effective_profile, run_dir=run_dir),
     )
     logging.info('(test) algo %s : %s', FLAGS.algorithms[algo_idx], test_stats)
+    test_row = {
+        key: value
+        for key, value in test_stats.items()
+        if isinstance(value, (int, float))
+    }
+    test_row['Algorithm'] = FLAGS.algorithms[algo_idx]
+    test_row['Seed'] = int(seed)
+    test_rows.append(test_row)
 
   if FLAGS.save_df and collect_results_df:
     multisol_reporting.save_csv_report(
@@ -792,7 +876,7 @@ def main(unused_argv):
   if FLAGS.save_model_to_file:
     eval_model.save_model_to_permanent_file(_default_model_output_path(run_dir))
 
-  logging.info('Done!')
+  return test_rows
 
 
 if __name__ == '__main__':
