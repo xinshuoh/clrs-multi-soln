@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from clrs._src.multi_sol.sampling import base
 from clrs._src.multi_sol.data.distribution import extract_probability_matrices
 
 
@@ -46,21 +47,11 @@ def leafiness_sort(prob_matrix):
 
 
 def row_wise_prob(prob_matrix):
-  normalized = np.array(prob_matrix, dtype=np.float64, copy=True)
-  for row_ix in range(len(normalized)):
-    row_sum = normalized[row_ix].sum()
-    if row_sum != 0:
-      normalized[row_ix] = normalized[row_ix] / row_sum
-  return normalized
+  return base.normalize_rows(np.asarray(prob_matrix))
 
 
 def choose_uniformly(not_prob_array):
-  val = np.random.uniform(low=0, high=sum(not_prob_array))
-  sums = np.cumsum(not_prob_array)
-  for threshold_ix in range(len(sums)):
-    if val < sums[threshold_ix]:
-      return threshold_ix
-  return np.random.randint(len(not_prob_array))
+  return base.sample_index(not_prob_array, fallback="uniform")
 
 
 # Legacy compatibility aliases.

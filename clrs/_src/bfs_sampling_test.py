@@ -79,8 +79,25 @@ class BFSSamplingTest(unittest.TestCase):
       normalized[nonzero] = normalized[nonzero] / row_sums[nonzero][:, None]
       return normalized
 
+    def as_index_list(values, expected_len):
+      values = np.asarray(values)
+      if values.ndim == 0:
+        return [int(values)] * expected_len
+      return values
+
+    def sample_index(probabilities, fallback=None):
+      probabilities = np.asarray(probabilities, dtype=np.float64)
+      total = probabilities.sum()
+      if total <= 0:
+        if fallback == "uniform":
+          return int(np.random.randint(len(probabilities)))
+        return fallback
+      return int(np.random.choice(len(probabilities), p=probabilities / total))
+
     base_module.extract_prob_matrices = extract_prob_matrices
     base_module.normalize_rows = normalize_rows
+    base_module.as_index_list = as_index_list
+    base_module.sample_index = sample_index
     self._install_module("clrs._src.multi_sol.sampling.base", base_module)
 
     bfs_module = _load_module(

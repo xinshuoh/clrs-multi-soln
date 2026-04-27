@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List
-
 import numpy as np
 
 from clrs._src.multi_sol.sampling import base
@@ -12,9 +10,8 @@ from clrs._src.multi_sol.sampling import base
 def sample_bfs_prim(outs_or_preds, source_nodes):
   """Sample BFS trees using greedy processed-set attachment."""
   prob_matrix_list = base.extract_prob_matrices(outs_or_preds)
+  source_nodes = base.as_index_list(source_nodes, len(prob_matrix_list))
   trees = []
-  if isinstance(source_nodes, int):
-    source_nodes = [source_nodes] * len(prob_matrix_list)
   for i, prob_matrix in enumerate(prob_matrix_list):
     trees.append(prim_like_sampler(prob_matrix, int(source_nodes[i])))
   return trees
@@ -41,9 +38,9 @@ def prim_like_sampler(prob_matrix, source):
 
     candidate_parents = list(processed)
     probs = np.array([prob_matrix[best_v, u] for u in candidate_parents])
-    total_prob = probs.sum()
-    if total_prob > 0:
-      parent = np.random.choice(candidate_parents, p=probs / total_prob)
+    parent_ix = base.sample_index(probs)
+    if parent_ix is not None:
+      parent = candidate_parents[parent_ix]
     else:
       parent = best_v
 
@@ -63,9 +60,9 @@ def sample_bfs_categorical(outs_or_preds):
     pi = np.zeros(num_nodes, dtype=int)
     normalized = base.normalize_rows(prob_matrix)
     for i in range(num_nodes):
-      row_sum = normalized[i].sum()
-      if row_sum > 0:
-        pi[i] = np.random.choice(num_nodes, p=normalized[i])
+      parent = base.sample_index(normalized[i])
+      if parent is not None:
+        pi[i] = parent
     trees.append(pi)
   return trees
 
@@ -73,9 +70,8 @@ def sample_bfs_categorical(outs_or_preds):
 def sample_bfs_beam(outs_or_preds, source_nodes, beam_width=3):
   """Sample BFS trees using heuristic beam search over processed-set states."""
   prob_matrix_list = base.extract_prob_matrices(outs_or_preds)
+  source_nodes = base.as_index_list(source_nodes, len(prob_matrix_list))
   trees = []
-  if isinstance(source_nodes, int):
-    source_nodes = [source_nodes] * len(prob_matrix_list)
   for i, prob_matrix in enumerate(prob_matrix_list):
     trees.append(bfs_beam_sampler(prob_matrix, int(source_nodes[i]), beam_width))
   return trees
@@ -128,4 +124,3 @@ def bfs_beam_sampler(prob_matrix, source, beam_width):
     beam = candidates[:beam_width]
 
   return beam[0]["pi"]
-

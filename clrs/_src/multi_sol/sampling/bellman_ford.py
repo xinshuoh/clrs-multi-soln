@@ -4,16 +4,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from clrs._src.multi_sol.sampling import dfs as dfs_sampling
-from clrs._src.multi_sol.data.distribution import extract_probability_matrices
+from clrs._src.multi_sol.sampling import base
 
 
 def sample_beamsearch(adjacencies, source_nodes, outs_or_preds):
-  prob_matrix_list = extract_probability_matrices(outs_or_preds)
   pi_trees = []
-  for ix, prob_matrix in enumerate(prob_matrix_list):
-    adjacency = adjacencies[ix]
-    source = source_nodes[ix]
+  for adjacency, source, prob_matrix in base.iter_adjacency_source_prob_matrices(
+      adjacencies, source_nodes, outs_or_preds):
     pi_trees.append(BF_beamsearch(adjacency, source, prob_matrix))
   return pi_trees
 
@@ -39,7 +36,7 @@ def BF_beamsearch(adjacency, source, prob_matrix, beamwidth=3):
         highest_node = candidate_path[-1]
         parent_probs = prob_matrix[highest_node]
         for _ in range(beamwidth):
-          candidate_parent = dfs_sampling.choose_uniformly(parent_probs)
+          candidate_parent = base.sample_index(parent_probs, fallback="uniform")
           new_path = np.append(candidate_path, candidate_parent)
           longer_paths.append(new_path)
 
@@ -66,35 +63,39 @@ def BF_beamsearch(adjacency, source, prob_matrix, beamwidth=3):
 
 
 def sample_greedysearch(adjacencies, source_nodes, outs_or_preds):
-  prob_matrix_list = extract_probability_matrices(outs_or_preds)
   pi_trees = []
-  for ix, prob_matrix in enumerate(prob_matrix_list):
-    adjacency = adjacencies[ix]
-    source = source_nodes[ix]
+  for adjacency, source, prob_matrix in base.iter_adjacency_source_prob_matrices(
+      adjacencies, source_nodes, outs_or_preds):
     pi_trees.append(BF_greedysearch(adjacency, source, prob_matrix))
   return pi_trees
 
 
 def BF_greedysearch(adjacency, source, prob_matrix, beamwidth=3):
   """Greedy parent sampler constrained by edge existence in adjacency."""
-  pi = np.zeros(len(prob_matrix))
+  pi = np.zeros(len(prob_matrix), dtype=int)
   pi[source] = source
 
   for node in range(len(prob_matrix)):
     if node == source:
       continue
-    candidates_costs = np.full(beamwidth, np.inf)
-    tries = 0
-    while (candidates_costs == np.full(len(candidates_costs), np.inf)).all() and tries < 10:
+
+    best_parent = base.highest_probability_real_neighbour(
+        adjacency, prob_matrix, node)
+    for _ in range(10):
       candidates = [
-          dfs_sampling.choose_uniformly(prob_matrix[node]) for _ in range(beamwidth)
+          base.sample_index(prob_matrix[node], fallback="uniform")
+          for _ in range(beamwidth)
       ]
-      candidates_costs = [adjacency[candidate, node] for candidate in candidates]
-      for ix in range(len(candidates_costs)):
-        if candidates_costs[ix] == 0:
-          candidates_costs[ix] = np.inf
-      tries += 1
-    pi[node] = candidates[np.argmin(candidates_costs)]
+      candidate_costs = np.asarray(
+          [adjacency[candidate, node] for candidate in candidates],
+          dtype=np.float64,
+      )
+      candidate_costs[candidate_costs == 0] = np.inf
+      if np.any(np.isfinite(candidate_costs)):
+        best_parent = candidates[int(np.argmin(candidate_costs))]
+        break
+
+    pi[node] = best_parent
   return pi
 
 

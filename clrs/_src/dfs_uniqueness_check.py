@@ -1,6 +1,6 @@
 import numpy as np
 from clrs._src.multi_sol.sampling import dfs as dfs_sampling
-from clrs._src.multi_sol.validation import check_graphs
+from clrs._src.multi_sol.validation import dfs as dfs_validation
 
 
 def check_uniqueness_dfs(As, probMatrices, n_samples = 5, method = "upwards"):
@@ -29,10 +29,10 @@ def check_uniqueness_dfs(As, probMatrices, n_samples = 5, method = "upwards"):
         # save the fraction of unique samples
         uniques.append(len(unique_trees)/n_samples)
 
-        valid_trees_of_uniques = [check_graphs.check_valid_dfsTree(As[i],j) for j in unique_trees]
+        valid_trees_of_uniques = [dfs_validation.check_valid_dfsTree(As[i],j) for j in unique_trees]
         valids_uniques.append(sum(valid_trees_of_uniques)/len(unique_trees))
 
-        valid_trees= [check_graphs.check_valid_dfsTree(As[i], j) for j in samples_matrix_i]
+        valid_trees= [dfs_validation.check_valid_dfsTree(As[i], j) for j in samples_matrix_i]
         valids.append(sum(valid_trees) / n_samples)
         #breakpoint()
 
@@ -68,10 +68,10 @@ def check_uniqueness_bf(As, Ss, probMatrices, n_samples = 5, method = "beam"):
         # save the fraction of unique samples
         uniques.append(len(unique_trees)/n_samples)
 
-        valid_trees_of_uniques = [check_graphs.check_valid_dfsTree(probMatrices_format[i],j) for j in unique_trees]
+        valid_trees_of_uniques = [dfs_validation.check_valid_dfsTree(probMatrices_format[i],j) for j in unique_trees]
         valids_uniques.append(sum(valid_trees_of_uniques)/len(unique_trees))
 
-        valid_trees= [check_graphs.check_valid_dfsTree(probMatrices_format[i], j) for j in samples_matrix_i]
+        valid_trees= [dfs_validation.check_valid_dfsTree(probMatrices_format[i], j) for j in samples_matrix_i]
         valids.append(sum(valid_trees) / n_samples)
         #breakpoint()
 

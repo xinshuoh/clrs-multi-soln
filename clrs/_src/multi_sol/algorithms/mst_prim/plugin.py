@@ -7,14 +7,12 @@ import jax
 import numpy as np
 
 from clrs._src.multi_sol.data.adapters import concat_tree
-from clrs._src.multi_sol.evaluation import distribution_validation
 from clrs._src.multi_sol.evaluation import reporting
 from clrs._src.multi_sol.evaluation import reports
 from clrs._src.multi_sol.evaluation.runners import evaluate_sampling_pair
-from clrs._src.multi_sol.sampling import bellman_ford as bf_sampling
 from clrs._src.multi_sol.sampling import dfs as dfs_sampling
-from clrs._src.multi_sol.validation import bellman_ford as bf_validation
-from clrs._src.bf_uniqueness_check import check_uniqueness_bf
+from clrs._src.multi_sol.sampling import mst_prim as mst_sampling
+from clrs._src.multi_sol.validation import mst_prim as mst_validation
 
 
 def evaluate_mst_prim_multisol_batch(
@@ -51,15 +49,7 @@ def evaluate_mst_prim_multisol_batch(
   adjacency = concat_tree(adjacency_batches, axis=0)
   source_nodes = concat_tree(source_batches, axis=0).astype(int)
   preds = concat_tree(pred_batches, axis=0)
-  if vd_flag:
-    distribution_validation.run_bf_distribution_validation(
-        adjacency=adjacency,
-        source_nodes=source_nodes,
-        outputs=outputs,
-        preds=preds,
-        nse=NSE,
-        output_dir=output_dir,
-    )
+  del vd_flag, NSE, output_dir
   out = clrs.evaluate(outputs, preds)
 
   random_sampling = evaluate_sampling_pair(
@@ -69,7 +59,7 @@ def evaluate_mst_prim_multisol_batch(
       true_input=outputs,
       adjacency=adjacency,
       source_nodes=source_nodes,
-      validate_fn=bf_validation.check_valid_bf_paths,
+      validate_fn=mst_validation.check_valid_mst_prim_tree,
   )
   argmax_sampling = evaluate_sampling_pair(
       model_sample_fn=lambda data: dfs_sampling.sample_argmax_listofdict(data),
@@ -78,67 +68,59 @@ def evaluate_mst_prim_multisol_batch(
       true_input=outputs,
       adjacency=adjacency,
       source_nodes=source_nodes,
-      validate_fn=bf_validation.check_valid_bf_paths,
+      validate_fn=mst_validation.check_valid_mst_prim_tree,
   )
-  beam_sampling = evaluate_sampling_pair(
-      model_sample_fn=lambda data, s: bf_sampling.sample_beamsearch(adjacency, s, data),
-      true_sample_fn=lambda data, s: bf_sampling.sample_beamsearch(adjacency, s, data),
+  tree_sampling = evaluate_sampling_pair(
+      model_sample_fn=lambda data, s: mst_sampling.sample_mst_prim_tree(
+          adjacency, s, data),
+      true_sample_fn=lambda data, s: mst_sampling.sample_mst_prim_tree(
+          adjacency, s, data),
       model_input=[preds],
       true_input=outputs,
       adjacency=adjacency,
       source_nodes=source_nodes,
-      validate_fn=bf_validation.check_valid_bf_paths,
+      validate_fn=mst_validation.check_valid_mst_prim_tree,
       s=source_nodes,
   )
   greedy_sampling = evaluate_sampling_pair(
-      model_sample_fn=lambda data, s: bf_sampling.sample_greedysearch(adjacency, s, data),
-      true_sample_fn=lambda data, s: bf_sampling.sample_greedysearch(adjacency, s, data),
+      model_sample_fn=lambda data, s: mst_sampling.sample_mst_prim_greedy(
+          adjacency, s, data),
+      true_sample_fn=lambda data, s: mst_sampling.sample_mst_prim_greedy(
+          adjacency, s, data),
       model_input=[preds],
       true_input=outputs,
       adjacency=adjacency,
       source_nodes=source_nodes,
-      validate_fn=bf_validation.check_valid_bf_paths,
+      validate_fn=mst_validation.check_valid_mst_prim_tree,
       s=source_nodes,
   )
 
-  result_dict = reports.build_bf_result_dict(
+  result_dict = reports.build_mst_prim_result_dict(
       adjacency_flat=[i.flatten() for i in adjacency],
       argmax=argmax_sampling,
       random_sampling=random_sampling,
-      beam=beam_sampling,
+      tree=tree_sampling,
       greedy=greedy_sampling,
   )
-  model_beam_uniques, model_beam_valids_uniques, model_beam_valids = (
-      check_uniqueness_bf(
-          probMatrices=[preds],
-          source_nodes=source_nodes,
-          As=adjacency,
-          method="beam"))
-  true_beam_uniques, true_beam_valids_uniques, true_beam_valids = (
-      check_uniqueness_bf(
-          probMatrices=outputs,
-          source_nodes=source_nodes,
-          As=adjacency,
-          method="beam"))
+  model_tree_uniques, model_tree_valids_uniques, model_tree_valids = (
+      _sampling_uniqueness(
+          [preds], adjacency, source_nodes, mst_sampling.sample_mst_prim_tree))
+  true_tree_uniques, true_tree_valids_uniques, true_tree_valids = (
+      _sampling_uniqueness(
+          outputs, adjacency, source_nodes, mst_sampling.sample_mst_prim_tree))
   model_greedy_uniques, model_greedy_valids_uniques, model_greedy_valids = (
-      check_uniqueness_bf(
-          probMatrices=[preds],
-          source_nodes=source_nodes,
-          As=adjacency,
-          method="greedy"))
+      _sampling_uniqueness(
+          [preds], adjacency, source_nodes, mst_sampling.sample_mst_prim_greedy))
   true_greedy_uniques, true_greedy_valids_uniques, true_greedy_valids = (
-      check_uniqueness_bf(
-          probMatrices=outputs,
-          source_nodes=source_nodes,
-          As=adjacency,
-          method="greedy"))
+      _sampling_uniqueness(
+          outputs, adjacency, source_nodes, mst_sampling.sample_mst_prim_greedy))
   result_dict.update({
-      "Beam_Model_Uniques": model_beam_uniques,
-      "Beam_Model_Valids_Uniques": model_beam_valids_uniques,
-      "Beam_Model_Valids": model_beam_valids,
-      "Beam_True_Uniques": true_beam_uniques,
-      "Beam_True_Valids_Uniques": true_beam_valids_uniques,
-      "Beam_True_Valids": true_beam_valids,
+      "Tree_Model_Uniques": model_tree_uniques,
+      "Tree_Model_Valids_Uniques": model_tree_valids_uniques,
+      "Tree_Model_Valids": model_tree_valids,
+      "Tree_True_Uniques": true_tree_uniques,
+      "Tree_True_Valids_Uniques": true_tree_valids_uniques,
+      "Tree_True_Valids": true_tree_valids,
       "Greedy_Model_Uniques": model_greedy_uniques,
       "Greedy_Model_Valids_Uniques": model_greedy_valids_uniques,
       "Greedy_Model_Valids": model_greedy_valids,
@@ -147,11 +129,46 @@ def evaluate_mst_prim_multisol_batch(
       "Greedy_True_Valids": true_greedy_valids,
   })
   report_sink = save_results_fn or reporting.discard_report
-  report_sink(result_dict, f"{filename}_BF")
+  report_sink(result_dict, f"{filename}_MSTPrim")
 
   if extras:
     out.update(extras)
   return {k: _unpack(v) for k, v in out.items()}
+
+
+def _sampling_uniqueness(
+    outs_or_preds,
+    adjacency,
+    source_nodes,
+    sample_fn,
+    n_samples=5,
+):
+  samples = np.asarray([
+      sample_fn(adjacency, source_nodes, outs_or_preds)
+      for _ in range(n_samples)
+  ])
+  uniques = []
+  valids_uniques = []
+  valids = []
+  for i in range(len(adjacency)):
+    samples_for_graph = samples[:, i]
+    unique_trees = [
+        list(item) for item in set(tuple(row) for row in samples_for_graph)
+    ]
+    uniques.append(len(unique_trees) / n_samples)
+    unique_valids = [
+        mst_validation.check_valid_mst_prim_tree(
+            adjacency[i], tree, int(source_nodes[i]))
+        for tree in unique_trees
+    ]
+    valids_uniques.append(sum(unique_valids) / len(unique_trees))
+    sample_valids = [
+        mst_validation.check_valid_mst_prim_tree(
+            adjacency[i], tree, int(source_nodes[i]))
+        for tree in samples_for_graph
+    ]
+    valids.append(sum(sample_valids) / n_samples)
+  return uniques, valids_uniques, valids
 
 
 def _unpack(v):

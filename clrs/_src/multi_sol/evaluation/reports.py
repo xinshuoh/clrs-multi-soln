@@ -109,3 +109,39 @@ def build_bf_result_dict(
       "Greedy_Model_Accuracy": greedy["model_accuracy"],
       "Greedy_True_Accuracy": greedy["true_accuracy"],
   }
+
+
+def build_mst_prim_result_dict(
+    adjacency_flat,
+    argmax,
+    random_sampling,
+    tree,
+    greedy,
+):
+  return {
+      "As": adjacency_flat,
+      "Argmax_Model_Trees": argmax["model_trees"],
+      "Argmax_True_Trees": argmax["true_trees"],
+      "Argmax_Model_Mask": argmax["model_mask"],
+      "Argmax_True_Mask": argmax["true_mask"],
+      "Argmax_Model_Accuracy": argmax["model_accuracy"],
+      "Argmax_True_Accuracy": argmax["true_accuracy"],
+      "Random_Model_Trees": random_sampling["model_trees"],
+      "Random_True_Trees": random_sampling["true_trees"],
+      "Random_Model_Mask": random_sampling["model_mask"],
+      "Random_True_Mask": random_sampling["true_mask"],
+      "Random_Model_Accuracy": random_sampling["model_accuracy"],
+      "Random_True_Accuracy": random_sampling["true_accuracy"],
+      "Tree_Model_Trees": tree["model_trees"],
+      "Tree_True_Trees": tree["true_trees"],
+      "Tree_Model_Mask": tree["model_mask"],
+      "Tree_True_Mask": tree["true_mask"],
+      "Tree_Model_Accuracy": tree["model_accuracy"],
+      "Tree_True_Accuracy": tree["true_accuracy"],
+      "Greedy_Model_Trees": greedy["model_trees"],
+      "Greedy_True_Trees": greedy["true_trees"],
+      "Greedy_Model_Mask": greedy["model_mask"],
+      "Greedy_True_Mask": greedy["true_mask"],
+      "Greedy_Model_Accuracy": greedy["model_accuracy"],
+      "Greedy_True_Accuracy": greedy["true_accuracy"],
+  }

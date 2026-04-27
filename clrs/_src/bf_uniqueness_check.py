@@ -1,6 +1,6 @@
 import numpy as np
 from clrs._src.multi_sol.sampling import bellman_ford as bf_sampling
-from clrs._src.multi_sol.validation import check_graphs
+from clrs._src.multi_sol.validation import bellman_ford as bf_validation
 
 def check_uniqueness_bf(probMatrices, source_nodes, As, n_samples = 5, method = "beam",values = "model"):
     uniques = []
@@ -28,10 +28,10 @@ def check_uniqueness_bf(probMatrices, source_nodes, As, n_samples = 5, method = 
         # save the fraction of unique samples
         uniques.append(len(unique_trees)/n_samples)
 
-        valid_trees_of_uniques = [check_graphs.check_valid_BFpaths(As[i],source_nodes[i],j) for j in unique_trees]
+        valid_trees_of_uniques = [bf_validation.check_valid_BFpaths(As[i],source_nodes[i],j) for j in unique_trees]
         valids_uniques.append(sum(valid_trees_of_uniques)/len(unique_trees))
 
-        valid_trees= [check_graphs.check_valid_BFpaths(As[i],source_nodes[i],j) for j in samples_matrix_i]
+        valid_trees= [bf_validation.check_valid_BFpaths(As[i],source_nodes[i],j) for j in samples_matrix_i]
         valids.append(sum(valid_trees) / n_samples)
         #breakpoint()
 

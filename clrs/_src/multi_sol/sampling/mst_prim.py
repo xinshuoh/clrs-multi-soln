@@ -1,132 +1,130 @@
 """MST-Prim extraction strategies (plugin-oriented)."""
-# TODO!
 
 from __future__ import annotations
-
-from typing import List
 
 import numpy as np
 
 from clrs._src.multi_sol.sampling import base
 
 
-def sample_bfs_prim(outs_or_preds, source_nodes):
-  """Sample BFS trees using greedy processed-set attachment."""
-  prob_matrix_list = base.extract_prob_matrices(outs_or_preds)
+def sample_mst_prim_greedy(
+    adjacencies,
+    source_nodes,
+    outs_or_preds,
+    num_candidates=3,
+    max_resamples=10,
+):
+  """Sample MST-Prim parents with a Bellman-Ford-style greedy baseline."""
   trees = []
-  if isinstance(source_nodes, int):
-    source_nodes = [source_nodes] * len(prob_matrix_list)
-  for i, prob_matrix in enumerate(prob_matrix_list):
-    trees.append(prim_like_sampler(prob_matrix, int(source_nodes[i])))
+  for adjacency, source, prob_matrix in base.iter_adjacency_source_prob_matrices(
+      adjacencies, source_nodes, outs_or_preds):
+    trees.append(mst_prim_greedy_sampler(
+        adjacency,
+        source,
+        prob_matrix,
+        num_candidates=num_candidates,
+        max_resamples=max_resamples,
+    ))
   return trees
 
 
-def prim_like_sampler(prob_matrix, source):
+def mst_prim_greedy_sampler(
+    adjacency,
+    source,
+    prob_matrix,
+    num_candidates=3,
+    max_resamples=10,
+):
+  """Choose low-weight sampled real neighbours independently for each node."""
+  adjacency = np.asarray(adjacency)
+  prob_matrix = base.normalize_rows(np.asarray(prob_matrix))
   num_nodes = prob_matrix.shape[0]
-  pi = np.full(num_nodes, -1, dtype=int)
+  pi = np.arange(num_nodes, dtype=int)
   pi[source] = source
 
-  processed = {source}
-  remaining = set(range(num_nodes)) - {source}
+  for v in range(num_nodes):
+    if v == source:
+      continue
 
-  while remaining:
-    best_v = -1
-    best_score = -1.0
-    for v in remaining:
-      score = sum(prob_matrix[v, u] for u in processed)
-      if score > best_score:
-        best_score = score
-        best_v = v
-    if best_v == -1:
-      best_v = list(remaining)[0]
+    chosen_parent = None
+    for _ in range(max_resamples):
+      candidates = base.sample_indices(prob_matrix[v], num_candidates)
+      plausible = [
+          u for u in candidates
+          if u != v and adjacency[u, v] != 0
+      ]
+      if plausible:
+        weights = np.array([adjacency[u, v] for u in plausible])
+        chosen_parent = int(plausible[int(np.argmin(weights))])
+        break
 
-    candidate_parents = list(processed)
-    probs = np.array([prob_matrix[best_v, u] for u in candidate_parents])
-    total_prob = probs.sum()
-    if total_prob > 0:
-      parent = np.random.choice(candidate_parents, p=probs / total_prob)
-    else:
-      parent = best_v
-
-    pi[best_v] = parent
-    processed.add(best_v)
-    remaining.remove(best_v)
+    if chosen_parent is None:
+      chosen_parent = base.highest_probability_real_neighbour(
+          adjacency, prob_matrix, v)
+    pi[v] = chosen_parent
 
   return pi
 
 
-def sample_bfs_categorical(outs_or_preds):
-  """Sample each node parent independently using per-row categorical draw."""
-  prob_matrix_list = base.extract_prob_matrices(outs_or_preds)
+def sample_mst_prim_tree(adjacencies, source_nodes, outs_or_preds):
+  """Sample source-rooted trees from parent probabilities over crossing edges."""
   trees = []
-  for prob_matrix in prob_matrix_list:
-    num_nodes = prob_matrix.shape[0]
-    pi = np.zeros(num_nodes, dtype=int)
-    normalized = base.normalize_rows(prob_matrix)
-    for i in range(num_nodes):
-      row_sum = normalized[i].sum()
-      if row_sum > 0:
-        pi[i] = np.random.choice(num_nodes, p=normalized[i])
-    trees.append(pi)
+  for adjacency, source, prob_matrix in base.iter_adjacency_source_prob_matrices(
+      adjacencies, source_nodes, outs_or_preds):
+    trees.append(mst_prim_tree_sampler(adjacency, source, prob_matrix))
   return trees
 
 
-def sample_bfs_beam(outs_or_preds, source_nodes, beam_width=3):
-  """Sample BFS trees using heuristic beam search over processed-set states."""
-  prob_matrix_list = base.extract_prob_matrices(outs_or_preds)
-  trees = []
-  if isinstance(source_nodes, int):
-    source_nodes = [source_nodes] * len(prob_matrix_list)
-  for i, prob_matrix in enumerate(prob_matrix_list):
-    trees.append(bfs_beam_sampler(prob_matrix, int(source_nodes[i]), beam_width))
-  return trees
-
-
-def bfs_beam_sampler(prob_matrix, source, beam_width):
+def mst_prim_tree_sampler(adjacency, source, prob_matrix):
+  """Grow a rooted spanning tree using P[v, u] on valid crossing edges."""
+  adjacency = np.asarray(adjacency)
+  prob_matrix = np.asarray(prob_matrix, dtype=np.float64)
   num_nodes = prob_matrix.shape[0]
-  initial_pi = np.full(num_nodes, -1, dtype=int)
-  initial_pi[source] = source
-  beam = [{"log_prob": 0.0, "pi": initial_pi, "processed": {source}}]
+  pi = np.arange(num_nodes, dtype=int)
+  pi[source] = source
+  in_tree = np.zeros(num_nodes, dtype=bool)
+  in_tree[source] = True
 
-  for _ in range(num_nodes - 1):
-    candidates = []
-    for hyp in beam:
-      processed = hyp["processed"]
-      pi = hyp["pi"]
-      curr_log_prob = hyp["log_prob"]
-      remaining = set(range(num_nodes)) - processed
-      if not remaining:
-        candidates.append(hyp)
-        continue
-
-      best_v = -1
-      best_mass = -1.0
-      for v in remaining:
-        mass = sum(prob_matrix[v, u] for u in processed)
-        if mass > best_mass:
-          best_mass = mass
-          best_v = v
-      if best_v == -1:
-        best_v = list(remaining)[0]
-
-      for u in list(processed):
-        p_val = prob_matrix[best_v, u]
-        if p_val > 1e-9:
-          new_log_prob = curr_log_prob + np.log(p_val)
-        else:
-          new_log_prob = curr_log_prob - 1e9
-        new_pi = pi.copy()
-        new_pi[best_v] = u
-        new_processed = processed.copy()
-        new_processed.add(best_v)
-        candidates.append(
-            {"log_prob": new_log_prob, "pi": new_pi, "processed": new_processed}
-        )
-
-    if not candidates:
+  while not np.all(in_tree):
+    crossing_edges, edge_probs = _crossing_edges(adjacency, prob_matrix, in_tree)
+    if not crossing_edges:
       break
-    candidates.sort(key=lambda x: x["log_prob"], reverse=True)
-    beam = candidates[:beam_width]
 
-  return beam[0]["pi"]
+    edge_ix: int = base.sample_index(edge_probs, fallback="uniform")
+    parent, child = crossing_edges[edge_ix]
+    pi[child] = parent
+    in_tree[child] = True
 
+  return pi
+
+
+def _crossing_edges(adjacency, prob_matrix, in_tree):
+  crossing_edges = []
+  edge_probs = []
+  tree_nodes = np.where(in_tree)[0]
+  remaining_nodes = np.where(~in_tree)[0]
+  for parent in tree_nodes:
+    for child in remaining_nodes:
+      if adjacency[parent, child] != 0:
+        crossing_edges.append((int(parent), int(child)))
+        edge_probs.append(prob_matrix[child, parent])
+  return crossing_edges, np.asarray(edge_probs, dtype=np.float64)
+
+
+# Compatibility aliases following the neighbouring sampling modules' style.
+sample_greedysearch = sample_mst_prim_greedy
+greedy_sampler = mst_prim_greedy_sampler
+sample_tree = sample_mst_prim_tree
+tree_sampler = mst_prim_tree_sampler
+
+
+__all__ = (
+    "sample_mst_prim_greedy",
+    "mst_prim_greedy_sampler",
+    "sample_mst_prim_tree",
+    "mst_prim_tree_sampler",
+    "sample_greedysearch",
+    "greedy_sampler",
+    "sample_tree",
+    "tree_sampler",
+)
