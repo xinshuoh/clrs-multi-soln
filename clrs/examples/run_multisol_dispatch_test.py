@@ -343,6 +343,7 @@ class RunMultisolDispatchTest(absltest.TestCase):
   def test_run_flag_defaults_preserve_upstream_behavior(self):
     defaults = self._run_flag_defaults()
     self.assertEqual(defaults["evaluation_profile"], "default")
+    self.assertEqual(defaults["val_evaluation_profile"], "default")
     self.assertIs(defaults["save_sampling_artifacts"], False)
     self.assertEqual(defaults["sampling_artifact_prefix"], "sampling_eval")
     self.assertEqual(defaults["run_dir"], "")

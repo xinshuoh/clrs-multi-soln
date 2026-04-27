@@ -139,7 +139,15 @@ flags.DEFINE_enum(
     'evaluation_profile',
     'default',
     ['default', 'sampling'],
-    'Evaluation profile: default CLRS metrics or multi-solution sampling plugins.')
+    'Test evaluation profile: default CLRS metrics or multi-solution sampling '
+    'plugins.')
+flags.DEFINE_enum(
+    'val_evaluation_profile',
+    'default',
+    ['default', 'sampling'],
+    'Validation profile used during training. Keep this as default for cheap '
+    'distribution scoring; use sampling only to run full multi-solution '
+    'sampling validation at each eval interval.')
 flags.DEFINE_boolean(
     'save_sampling_artifacts',
     False,
@@ -505,6 +513,10 @@ def _effective_evaluation_profile() -> str:
   return 'default'
 
 
+def _effective_validation_profile() -> str:
+  return FLAGS.val_evaluation_profile
+
+
 def _extension_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
   kwargs = {
       'vd_flag': FLAGS.validate_distributions,
@@ -644,11 +656,14 @@ def _run_single_seed(seed: int, run_dir: str):
   test_lengths = _resolve_test_lengths()
   checkpoint_path = _resolve_checkpoint_path(run_dir)
   effective_profile = _effective_evaluation_profile()
+  validation_profile = _effective_validation_profile()
   logging.info('Run output directory: %s', run_dir)
   logging.info('Checkpoint directory: %s', checkpoint_path)
+  logging.info('Validation evaluation profile: %s', validation_profile)
+  logging.info('Test evaluation profile: %s', effective_profile)
   if effective_profile != FLAGS.evaluation_profile:
     logging.info(
-        'Using compatibility evaluation profile "%s" (requested "%s").',
+        'Using compatibility test evaluation profile "%s" (requested "%s").',
         effective_profile,
         FLAGS.evaluation_profile,
     )
@@ -780,7 +795,7 @@ def _run_single_seed(seed: int, run_dir: str):
         val_stats = multisol_dispatch.evaluate_with_registry(
             algorithm_name=FLAGS.algorithms[algo_idx],
             split='val',
-            profile=effective_profile,
+            profile=validation_profile,
             sampler=val_samplers[algo_idx],
             predict_fn=functools.partial(
                 eval_model.predict, algorithm_index=algo_idx),
@@ -792,7 +807,7 @@ def _run_single_seed(seed: int, run_dir: str):
             fallback_eval_fn=collect_and_eval,
             extension_kwargs=_extension_eval_kwargs(split='val', run_dir=run_dir),
             report_sink=_sampling_report_sink(
-                split='val', profile=effective_profile, run_dir=run_dir),
+                split='val', profile=validation_profile, run_dir=run_dir),
         )
         logging.info('(val) algo %s step %d: %s',
                      FLAGS.algorithms[algo_idx], step, val_stats)
