@@ -176,6 +176,11 @@ flags.DEFINE_string(
     'model_output_path',
     '',
     'Output path for --save_model_to_file (default derived from --filename).')
+flags.DEFINE_string(
+    'load_model_from_file',
+    '',
+    'Load a saved model .pkl from this path and run evaluation only. Requires '
+    '--train_steps=0.')
 flags.DEFINE_boolean(
     'validate_distributions',
     False,
@@ -619,6 +624,10 @@ def main(unused_argv):
 
 
 def _run_single_seed(seed: int, run_dir: str):
+  if FLAGS.load_model_from_file and FLAGS.train_steps != 0:
+    raise ValueError(
+        '--load_model_from_file is evaluation-only. Set --train_steps=0.')
+
   if FLAGS.hint_mode == 'encoded_decoded':
     encode_hints = True
     decode_hints = True
@@ -828,6 +837,10 @@ def _run_single_seed(seed: int, run_dir: str):
   if FLAGS.train_steps == 0 and eval_model.params is None:
     logging.info('No training steps requested, evaluation only. Initialising model...')
     eval_model.init([next(t).features for t in val_samplers], seed + 1)
+  if FLAGS.load_model_from_file:
+    logging.info('Loading model from %s', FLAGS.load_model_from_file)
+    eval_model.restore_model_from_file(
+        FLAGS.load_model_from_file, only_load_processor=False)
   if saved_best_checkpoint:
     logging.info('Restoring best model from checkpoint...')
     eval_model.restore_model('best.pkl', only_load_processor=False)

@@ -474,12 +474,28 @@ class BaselineModel(model.Model):
     path = os.path.join(self.checkpoint_path, file_name)
     with open(path, 'rb') as f:
       restored_state = pickle.load(f)
-      if only_load_processor:
-        restored_params = _filter_in_processor(restored_state['params'])
-      else:
-        restored_params = restored_state['params']
+    self._restore_state(restored_state, only_load_processor=only_load_processor)
+
+  def restore_model_from_file(
+      self,
+      file_name: str,
+      only_load_processor: bool = False,
+  ):
+    """Restore model state from an explicit pickle path."""
+    with open(file_name, 'rb') as f:
+      restored_state = pickle.load(f)
+    self._restore_state(restored_state, only_load_processor=only_load_processor)
+
+  def _restore_state(self, restored_state, only_load_processor: bool = False):
+    if only_load_processor:
+      restored_params = _filter_in_processor(restored_state['params'])
+    else:
+      restored_params = restored_state['params']
+    if self.params is None:
+      self.params = restored_params
+    else:
       self.params = hk.data_structures.merge(self.params, restored_params)
-      self.opt_state = restored_state['opt_state']
+    self.opt_state = restored_state['opt_state']
 
   def save_model(self, file_name: str):
     """Save model (processor weights only) to `file_name`."""
@@ -490,9 +506,9 @@ class BaselineModel(model.Model):
       pickle.dump(to_save, f)
 
   def save_model_to_permanent_file(self, file_name: str):
-      to_save = {'params': self.params, 'opt_state': self.opt_state}
-      with open(file_name, 'wb') as f:
-          pickle.dump(to_save, f)
+    to_save = {'params': self.params, 'opt_state': self.opt_state}
+    with open(file_name, 'wb') as f:
+      pickle.dump(to_save, f)
 
 class BaselineModelChunked(BaselineModel):
   """Model that processes time-chunked data.
