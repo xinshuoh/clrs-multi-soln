@@ -189,7 +189,7 @@ def split_stages(
         raise ProbeError(f'Expected one-hot `data` for probe "{name}"')
 
     dim_to_expand = 1 if stage == _Stage.HINT else 0
-    data_point = DataPoint(_name=name, _location=loc, _type_=t,
+    data_point = DataPoint(name=name, location=loc, type_=t,
                            data=np.expand_dims(data, dim_to_expand))
 
     if stage == _Stage.INPUT:

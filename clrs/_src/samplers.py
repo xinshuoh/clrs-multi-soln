@@ -793,19 +793,19 @@ def _preprocess_permutations(probes, enforce_permutations):
       new_x, mask = probing.predecessor_to_cyclic_predecessor_and_first(x.data)
       output.append(
           probing.DataPoint(
-              _name=x.name,
-              _location=x.location,
-              _type_=specs.Type.PERMUTATION_POINTER,
+              name=x.name,
+              location=x.location,
+              type_=specs.Type.PERMUTATION_POINTER,
               data=new_x))
       output.append(
           probing.DataPoint(
-              _name=x.name + '_mask',
-              _location=x.location,
-              _type_=specs.Type.MASK_ONE,
+              name=x.name + '_mask',
+              location=x.location,
+              type_=specs.Type.MASK_ONE,
               data=mask))
     else:
-      output.append(probing.DataPoint(_name=x.name, _location=x.location,
-                                      _type_=specs.Type.POINTER, data=x.data))
+      output.append(probing.DataPoint(name=x.name, location=x.location,
+                                      type_=specs.Type.POINTER, data=x.data))
   return output
 
 
@@ -854,8 +854,8 @@ def process_pred_as_input(spec, sample_iterator):
           assert np.sum(np.abs(pred_h.data[1:int(features.lengths[i]), i] -
                                pred_h.data[0, i])) == 0.0
         inputs = tuple(features.inputs) + (
-            probing.DataPoint(_name='pred', _location=pred_h.location,
-                              _type_=pred_h.type_, data=pred_h.data[0]),)
+            probing.DataPoint(name='pred', location=pred_h.location,
+                              type_=pred_h.type_, data=pred_h.data[0]),)
         features = features._replace(inputs=tuple(inputs),
                                      hints=tuple(hints))
         feedback = feedback._replace(features=features)
