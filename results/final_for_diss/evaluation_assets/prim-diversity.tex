@@ -1,0 +1,18 @@
+\begin{table}[hbt!]
+    \centering
+    \small
+    \begin{tabular}{llcccc}
+        \toprule
+        \textbf{Size} & \textbf{Distribution} & \textbf{Argmax} & \textbf{Tree} & \textbf{Greedy} & \textbf{Random} \\
+        \midrule
+        $n=5$ & True & 0.04 $\pm$ 0.00 & 0.04 $\pm$ 0.00 & 0.04 $\pm$ 0.00 & 1.00 $\pm$ 0.00 \\
+        $n=5$ & Model & 0.04 $\pm$ 0.00 & 0.04 $\pm$ 0.00 & 0.04 $\pm$ 0.00 & 1.00 $\pm$ 0.00 \\
+        $n=16$ & True & 0.04 $\pm$ 0.00 & 0.53 $\pm$ 0.05 & 0.49 $\pm$ 0.08 & 1.00 $\pm$ 0.00 \\
+        $n=16$ & Model & 0.04 $\pm$ 0.00 & 0.58 $\pm$ 0.05 & 0.55 $\pm$ 0.08 & 1.00 $\pm$ 0.00 \\
+        $n=64$ & True & 0.04 $\pm$ 0.00 & 1.00 $\pm$ 0.00 & 1.00 $\pm$ 0.00 & 1.00 $\pm$ 0.00 \\
+        $n=64$ & Model & 0.04 $\pm$ 0.00 & 1.00 $\pm$ 0.00 & 1.00 $\pm$ 0.00 & 1.00 $\pm$ 0.00 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Prim-Multi diversity, measured as the proportion of distinct predecessor arrays among 25 samples.}
+    \label{tab:prim-diversity}
+\end{table}

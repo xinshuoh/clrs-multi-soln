@@ -1,0 +1,18 @@
+\begin{table}[hbt!]
+    \centering
+    \small
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Algorithm} & \textbf{Size} & \textbf{KL divergence} & \textbf{Soft accuracy} \\
+        \midrule
+        BFS-Multi & $n=5$ & 0.0008 $\pm$ 0.0001 & 1.00 $\pm$ 0.00 \\
+        BFS-Multi & $n=16$ & 0.0010 $\pm$ 0.0004 & 1.00 $\pm$ 0.00 \\
+        BFS-Multi & $n=64$ & 0.0010 $\pm$ 0.0004 & 1.00 $\pm$ 0.00 \\
+        Prim-Multi & $n=5$ & 0.0017 $\pm$ 0.0003 & 0.99 $\pm$ 0.00 \\
+        Prim-Multi & $n=16$ & 0.0018 $\pm$ 0.0002 & 0.99 $\pm$ 0.00 \\
+        Prim-Multi & $n=64$ & 0.0017 $\pm$ 0.0003 & 0.99 $\pm$ 0.00 \\
+        \bottomrule
+    \end{tabular}
+    \caption{Final distribution-fitting metrics after 10,000 training steps. KL divergence is reported to four decimal places because the final values are small.}
+    \label{tab:distribution-fitting-validation}
+\end{table}
