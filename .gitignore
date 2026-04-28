@@ -20,7 +20,8 @@ clrs_env/
 .idea
 .vscode
 
-# Logs
+# HPC stuff
 slurm_logs/
+slurm_scripts/
 
 dissertation/
