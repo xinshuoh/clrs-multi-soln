@@ -19,65 +19,64 @@ _NUM_SOLUTIONS = 20
 def bellman_ford_multi(
     A: _Array, s: int, seed: int, deterministic: bool = False) -> _Out:
   """Multiple-solution Bellman-Ford target generation."""
-  rng = np.random.RandomState(seed)
   chex.assert_rank(A, 2)
-  A_pos = np.arange(A.shape[0])
-  probeslist = []
-  pies = []
-  algorithm_spec = common.resolve_multisol_spec("bellman_ford_multi")
+  return common.generate_parent_distribution_target(
+      algorithm_name="bellman_ford_multi",
+      num_nodes=A.shape[0],
+      seed=seed,
+      deterministic=deterministic,
+      run_single=lambda rng, algorithm_spec, deterministic: (
+          _bellman_ford_execution(A, s, rng, algorithm_spec)),
+      num_solutions=_NUM_SOLUTIONS,
+  )
 
-  num_solutions = 1 if deterministic else _NUM_SOLUTIONS
-  for _ in range(num_solutions):
-    probes = probing.initialize(algorithm_spec)
+
+def _bellman_ford_execution(A, s, rng, algorithm_spec):
+  A_pos = np.arange(A.shape[0])
+  probes = probing.initialize(algorithm_spec)
+  probing.push(
+      probes,
+      specs.Stage.INPUT,
+      next_probe={
+          'pos': np.copy(A_pos) * 1.0 / A.shape[0],
+          's': probing.mask_one(s, A.shape[0]),
+          'A': np.copy(A),
+          'adj': probing.graph(np.copy(A))
+      })
+
+  d = np.zeros(A.shape[0])
+  pi = np.arange(A.shape[0])
+  msk = np.zeros(A.shape[0])
+  d[s] = 0
+  msk[s] = 1
+
+  shuffled1 = np.arange(1, A.shape[0])
+  rng.shuffle(shuffled1)
+  shuffled1 = np.concatenate(([0], shuffled1))
+  shuffled2 = np.arange(A.shape[0])
+  rng.shuffle(shuffled2)
+
+  while True:
+    prev_d = np.copy(d)
+    prev_msk = np.copy(msk)
     probing.push(
         probes,
-        specs.Stage.INPUT,
+        specs.Stage.HINT,
         next_probe={
-            'pos': np.copy(A_pos) * 1.0 / A.shape[0],
-            's': probing.mask_one(s, A.shape[0]),
-            'A': np.copy(A),
-            'adj': probing.graph(np.copy(A))
+            'pi_h': np.copy(pi),
+            'd': np.copy(prev_d),
+            'msk': np.copy(prev_msk)
         })
+    for u in shuffled1:
+      for v in shuffled2:
+        if prev_msk[u] == 1 and A[u, v] != 0:
+          if msk[v] == 0 or prev_d[u] + A[u, v] < d[v]:
+            d[v] = prev_d[u] + A[u, v]
+            pi[v] = u
+          msk[v] = 1
+    if np.all(d == prev_d):
+      break
 
-    d = np.zeros(A.shape[0])
-    pi = np.arange(A.shape[0])
-    msk = np.zeros(A.shape[0])
-    d[s] = 0
-    msk[s] = 1
-
-    shuffled1 = np.arange(1, A.shape[0])
-    rng.shuffle(shuffled1)
-    shuffled1 = np.concatenate(([0], shuffled1))
-    shuffled2 = np.arange(A.shape[0])
-    rng.shuffle(shuffled2)
-
-    while True:
-      prev_d = np.copy(d)
-      prev_msk = np.copy(msk)
-      probing.push(
-          probes,
-          specs.Stage.HINT,
-          next_probe={
-              'pi_h': np.copy(pi),
-              'd': np.copy(prev_d),
-              'msk': np.copy(prev_msk)
-          })
-      for u in shuffled1:
-        for v in shuffled2:
-          if prev_msk[u] == 1 and A[u, v] != 0:
-            if msk[v] == 0 or prev_d[u] + A[u, v] < d[v]:
-              d[v] = prev_d[u] + A[u, v]
-              pi[v] = u
-            msk[v] = 1
-      if np.all(d == prev_d):
-        break
-
-    probing.push(probes, specs.Stage.OUTPUT, next_probe={'pi': np.copy(pi)})
-    probing.finalize(probes)
-    pies.append(pi)
-    probeslist.append(probes)
-
-  parent_dist = common.parent_distribution_from_trees(pies, A.shape[0])
-  probeslist[0]['output']['node']['pi']['data'] = parent_dist
-  return parent_dist, probeslist[0]
-
+  probing.push(probes, specs.Stage.OUTPUT, next_probe={'pi': np.copy(pi)})
+  probing.finalize(probes)
+  return pi, probes

@@ -86,6 +86,11 @@ class DfsPluginTest(unittest.TestCase):
 
     adapters_module = types.ModuleType("clrs._src.multi_sol.data.adapters")
     adapters_module.concat_tree = lambda items, axis: items[0]
+    adapters_module.extract_dfs_graph_and_source = (
+        lambda feedback: (
+            feedback[0][0][1].data,
+            np.zeros(feedback[0][0][1].data.shape[0], dtype=int),
+        ))
     self._install_module("clrs._src.multi_sol.data.adapters", adapters_module)
 
     dist_validation_module = types.ModuleType(

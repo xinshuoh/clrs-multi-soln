@@ -87,6 +87,11 @@ class BellmanFordPluginTest(unittest.TestCase):
 
     adapters_module = types.ModuleType("clrs._src.multi_sol.data.adapters")
     adapters_module.concat_tree = lambda items, axis: items[0]
+    adapters_module.extract_bellman_ford_graph_and_source = (
+        lambda feedback: (
+            feedback[0][0][2].data,
+            np.argmax(feedback[0][0][1].data, axis=1),
+        ))
     self._install_module("clrs._src.multi_sol.data.adapters", adapters_module)
 
     dist_validation_module = types.ModuleType(
