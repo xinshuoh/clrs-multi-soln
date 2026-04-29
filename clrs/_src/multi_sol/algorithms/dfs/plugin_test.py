@@ -215,13 +215,13 @@ class DfsPluginTest(unittest.TestCase):
         output_dir="results/run-7",
     )
 
-    self.assertEqual(saved["filename"], "dfs_case_DFS")
+    self.assertEqual(saved["filename"], "dfs_case")
     self.assertEqual(out["score"], 0.66)
     self.assertEqual(out["phase"], "ok")
     self.assertEqual(captured_sampling["n_samples"], 42)
     self.assertEqual(captured_algorithm_sampling["n_samples"], 42)
     self.assertEqual(captured_curves["output_dir"], "results/run-7")
-    self.assertEqual(captured_curves["filename"], "dfs_case_DFS")
+    self.assertEqual(captured_curves["filename"], "dfs_case")
     self.assertEqual(len(captured_curves["curves"]), 2)
     np.testing.assert_array_equal(captured_sampling["adjacency"], adjacency)
 

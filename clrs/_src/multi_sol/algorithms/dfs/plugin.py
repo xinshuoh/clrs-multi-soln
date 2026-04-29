@@ -122,7 +122,7 @@ def evaluate_dfs_multisol_batch(
   )
   result_dict.update(sampling_summary["result_dict"])
   if vd_flag:
-    algorithm_rng = np.random.default_rng()
+    algorithm_rng = np.random.default_rng(np.random.randint(0, 2**32))
     algorithm_summary = distribution_validation.evaluate_sampling_sources(
         sources={
             ("DFS", "Algorithm"): (
@@ -142,11 +142,11 @@ def evaluate_dfs_multisol_batch(
     out.update(algorithm_summary["scalar_metrics"])
     distribution_validation.save_sampling_curve_artifacts(
         sampling_summary["curves"],
-        filename=f"{filename}_DFS",
+        filename=filename,
         output_dir=output_dir,
     )
   report_sink = save_results_fn or reporting.discard_report
-  report_sink(result_dict, f"{filename}_DFS")
+  report_sink(result_dict, filename)
 
   out.update(sampling_summary["scalar_metrics"])
   if extras:

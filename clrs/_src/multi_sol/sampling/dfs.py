@@ -33,9 +33,8 @@ def sample_argmax_listofdatapoint(outputs):
 
 def sample_random_list(outs_or_preds):
   trees = []
-  rng = np.random.default_rng()
   for prob_matrix in extract_probability_matrices(outs_or_preds):
-    pi = [rng.integers(len(row)) for row in prob_matrix]
+    pi = [np.random.randint(len(row)) for row in prob_matrix]
     trees.append(pi)
   return trees
 

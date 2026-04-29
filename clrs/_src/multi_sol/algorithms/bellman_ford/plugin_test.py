@@ -222,13 +222,13 @@ class BellmanFordPluginTest(unittest.TestCase):
         output_dir="results/run-9",
     )
 
-    self.assertEqual(saved["filename"], "bf_case_BF")
+    self.assertEqual(saved["filename"], "bf_case")
     self.assertEqual(out["score"], 0.77)
     self.assertEqual(out["phase"], "ok")
     self.assertEqual(captured_sampling["n_samples"], 37)
     self.assertEqual(captured_algorithm_sampling["n_samples"], 37)
     self.assertEqual(captured_curves["output_dir"], "results/run-9")
-    self.assertEqual(captured_curves["filename"], "bf_case_BF")
+    self.assertEqual(captured_curves["filename"], "bf_case")
     self.assertEqual(len(captured_curves["curves"]), 2)
     np.testing.assert_array_equal(captured_sampling["adjacency"], adjacency)
     np.testing.assert_array_equal(captured_sampling["source_nodes"],

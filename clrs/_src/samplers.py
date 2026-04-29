@@ -223,7 +223,7 @@ class Sampler(abc.ABC):
       p = self._rng.permutation(nb_nodes)  # To allow nontrivial solutions
       mat = mat[p, :][:, p]
     if weighted:
-      weights = np.random.randint(low=low, high=high, size=(nb_nodes, nb_nodes))
+      weights = self._rng.randint(low=low, high=high, size=(nb_nodes, nb_nodes))
       weights = weights/(high - low)
       #breakpoint()
       if not directed:

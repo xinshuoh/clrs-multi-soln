@@ -558,27 +558,19 @@ def _extension_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
           if FLAGS.distribution_validation_graphs > 0 else None
       ),
   }
-  if split == 'test' and FLAGS.filename:
-    kwargs['filename'] = FLAGS.filename
+  if split == 'test':
+    kwargs['filename'] = FLAGS.filename or 'samples'
   return kwargs
 
 
 def _sampling_report_sink(split: str, profile: str, run_dir: str):
   if split != 'test' or profile != 'sampling':
     return None
-  if FLAGS.filename:
-    return functools.partial(
-        multisol_reporting.save_csv_report,
-        output_dir=run_dir,
-        timestamped=False,
-    )
-  if FLAGS.save_sampling_artifacts:
-    return functools.partial(
-        multisol_reporting.save_pickle_report,
-        output_dir=run_dir,
-        timestamped=True,
-    )
-  return None
+  return functools.partial(
+      multisol_reporting.save_csv_report,
+      output_dir=run_dir,
+      timestamped=False,
+  )
 
 
 def _default_results_df_filename() -> str:
@@ -811,6 +803,7 @@ def _run_single_seed(seed: int, run_dir: str):
   collect_results_df = FLAGS.results_df or FLAGS.save_df
   metric_rows = []
 
+  np.random.seed(seed)
   rng = np.random.RandomState(seed)
   rng_key = jax.random.PRNGKey(rng.randint(2**32))
 

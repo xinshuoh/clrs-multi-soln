@@ -250,7 +250,7 @@ class EvaluateBfsPluginTest(unittest.TestCase):
         filename="bfs_smoke",
     )
 
-    self.assertEqual(saved["filename"], "bfs_smoke_BFS")
+    self.assertEqual(saved["filename"], "bfs_smoke")
     self.assertIn("Categorical_Model_Accuracy", saved["result_dict"])
     self.assertIn("Beam_True_Accuracy", saved["result_dict"])
     self.assertEqual(out["score"], 0.75)
