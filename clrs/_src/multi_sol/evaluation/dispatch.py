@@ -107,7 +107,12 @@ def _resolve_extension_evaluator(
   if profile != "sampling":
     return None
   extension = _get_multisol_registry().get_extension(algorithm_name)
-  return extension.evaluator if extension else None
+  if extension is None:
+    return None
+  if getattr(extension, "evaluation", None) is not None:
+    from clrs._src.multi_sol.evaluation import definition_evaluation
+    return definition_evaluation.evaluator_for_definition(extension)
+  return extension.evaluator
 
 
 def evaluate_with_registry(

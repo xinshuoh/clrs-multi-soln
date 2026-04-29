@@ -7,6 +7,7 @@ from absl.testing import absltest
 
 from clrs._src import samplers
 from clrs._src import specs
+from clrs._src.multi_sol.algorithms import builtins
 from clrs._src.multi_sol.algorithms.bellman_ford import generator as bf_generator
 from clrs._src.multi_sol.algorithms.bfs import generator as bfs_generator
 from clrs._src.multi_sol.algorithms.dfs import generator as dfs_generator
@@ -106,8 +107,21 @@ class MultiSolRegistryTest(absltest.TestCase):
       self.assertIsNotNone(extension)
       self.assertIsNotNone(extension.evaluator)
 
-  def test_registry_builtins_loaded_from_manifests(self):
-    self.assertGreaterEqual(len(registry.list_extensions()), 3)
+  def test_builtin_extensions_expose_solution_spaces(self):
+    for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
+      extension = registry.get_extension(name)
+      self.assertIsNotNone(extension)
+      self.assertIsNotNone(extension.solution_space)
+      self.assertIsNotNone(extension.solution_space.batch_extractor)
+      self.assertIsNotNone(extension.solution_space.validation_method)
+      self.assertNotEmpty(extension.solution_space.extraction_methods)
+
+  def test_registry_builtins_loaded_from_definition_catalog(self):
+    catalog_names = {
+        definition.algorithm_name
+        for definition in builtins.BUILTIN_DEFINITIONS
+    }
+    self.assertEqual(set(registry.list_extensions()), catalog_names)
 
 
 if __name__ == "__main__":

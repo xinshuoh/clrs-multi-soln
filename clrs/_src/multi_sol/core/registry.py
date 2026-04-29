@@ -2,30 +2,11 @@
 
 from __future__ import annotations
 
-import dataclasses
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
-
-SpecFactory = Callable[[Dict[str, Dict[str, Any]]], Dict[str, Any]]
-Algorithm = Callable[..., Any]
-EvaluatorFn = Callable[..., dict]
-SpecProvider = Dict[str, Any] | SpecFactory
-
-
-@dataclasses.dataclass(frozen=True)
-class MultiSolExtensionDefinition:
-  """Descriptor for one multi-solution algorithm extension."""
-
-  algorithm_name: str
-  base_algorithm_name: str
-  spec: SpecProvider
-  sampler_class: Optional[type] = None
-  algorithm: Optional[Algorithm] = None
-  evaluator: Optional[EvaluatorFn] = None
-
-
-# Backward-compatible alias for previous name.
-MultiSolAlgorithmExtension = MultiSolExtensionDefinition
+from clrs._src.multi_sol.core.definitions import MultiSolAlgorithmDefinition
+from clrs._src.multi_sol.core.definitions import MultiSolAlgorithmExtension
+from clrs._src.multi_sol.core.definitions import MultiSolExtensionDefinition
 
 
 _EXTENSIONS: Dict[str, MultiSolExtensionDefinition] = {}
@@ -37,13 +18,13 @@ def ensure_builtin_extensions_registered() -> None:
   if _BUILTINS_REGISTERED:
     return
   # Lazy import to avoid circular dependency at module import time.
-  from clrs._src.multi_sol.core import manifest_loader
-  for extension in manifest_loader.load_manifest_extensions():
-    register_extension(extension)
+  from clrs._src.multi_sol.algorithms import builtins
+  for definition in builtins.BUILTIN_DEFINITIONS:
+    register_extension(definition)
   _BUILTINS_REGISTERED = True
 
 
-def register_extension(extension: MultiSolExtensionDefinition) -> None:
+def register_extension(extension: MultiSolAlgorithmDefinition) -> None:
   name = extension.algorithm_name
   if name in _EXTENSIONS:
     raise ValueError(f"Extension already registered for {name}.")
