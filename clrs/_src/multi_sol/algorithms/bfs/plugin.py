@@ -29,6 +29,7 @@ def evaluate_bfs_multisol_batch(
     vd_flag=False,
     NSE=100,
     output_dir=".",
+    curve_max_graphs=None,
 ) -> Dict[str, float]:
   """Collect, evaluate, sample, validate and save BFS multi-solution results."""
   processed_samples = 0
@@ -119,9 +120,28 @@ def evaluate_bfs_multisol_batch(
       source_nodes=source_nodes,
       validate_fn=bfs_validation.check_valid_bfs_tree,
       n_samples=NSE,
+      curve_max_graphs=curve_max_graphs,
   )
   result_dict.update(sampling_summary["result_dict"])
   if vd_flag:
+    algorithm_rng = np.random.default_rng()
+    algorithm_summary = distribution_validation.evaluate_sampling_sources(
+        sources={
+            ("BFS", "Algorithm"): (
+                lambda _data: _sample_randomized_bfs_algorithm(
+                    adjacency, source_nodes, algorithm_rng),
+                None,
+            ),
+        },
+        adjacency=adjacency,
+        source_nodes=source_nodes,
+        validate_fn=bfs_validation.check_valid_bfs_tree,
+        n_samples=NSE,
+        curve_max_graphs=curve_max_graphs,
+    )
+    result_dict.update(algorithm_summary["result_dict"])
+    sampling_summary["curves"].extend(algorithm_summary["curves"])
+    out.update(algorithm_summary["scalar_metrics"])
     distribution_validation.save_sampling_curve_artifacts(
         sampling_summary["curves"],
         filename=f"{filename}_BFS",
@@ -134,6 +154,34 @@ def evaluate_bfs_multisol_batch(
   if extras:
     out.update(copy.deepcopy(extras))
   return {k: _unpack(v) for k, v in out.items()}
+
+
+def _sample_randomized_bfs_algorithm(adjacency, source_nodes, rng):
+  return [
+      _randomized_bfs_tree(np.asarray(graph), int(source), rng)
+      for graph, source in zip(adjacency, source_nodes)
+  ]
+
+
+def _randomized_bfs_tree(adjacency, source, rng):
+  n = adjacency.shape[0]
+  reach = np.zeros(n, dtype=bool)
+  pi = np.arange(n, dtype=int)
+  reach[source] = True
+
+  while True:
+    prev_reach = np.copy(reach)
+    sources = np.where(prev_reach)[0]
+    rng.shuffle(sources)
+    for src in sources:
+      for child in range(n):
+        if adjacency[src, child] > 0:
+          if pi[child] == child and child != source:
+            pi[child] = int(src)
+          reach[child] = True
+    if np.all(reach == prev_reach):
+      break
+  return pi
 
 
 def _unpack(v):

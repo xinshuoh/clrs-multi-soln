@@ -27,6 +27,7 @@ def evaluate_bf_multisol_batch(
     vd_flag=False,
     NSE=100,
     output_dir=".",
+    curve_max_graphs=None,
 ) -> Dict[str, float]:
   """Collect, evaluate, sample, validate and save Bellman-Ford results."""
   processed_samples = 0
@@ -123,9 +124,28 @@ def evaluate_bf_multisol_batch(
       source_nodes=source_nodes,
       validate_fn=bf_validation.check_valid_bf_paths,
       n_samples=NSE,
+      curve_max_graphs=curve_max_graphs,
   )
   result_dict.update(sampling_summary["result_dict"])
   if vd_flag:
+    algorithm_rng = np.random.default_rng()
+    algorithm_summary = distribution_validation.evaluate_sampling_sources(
+        sources={
+            ("BellmanFord", "Algorithm"): (
+                lambda _data: _sample_randomized_bellman_ford_algorithm(
+                    adjacency, source_nodes, algorithm_rng),
+                None,
+            ),
+        },
+        adjacency=adjacency,
+        source_nodes=source_nodes,
+        validate_fn=bf_validation.check_valid_bf_paths,
+        n_samples=NSE,
+        curve_max_graphs=curve_max_graphs,
+    )
+    result_dict.update(algorithm_summary["result_dict"])
+    sampling_summary["curves"].extend(algorithm_summary["curves"])
+    out.update(algorithm_summary["scalar_metrics"])
     distribution_validation.save_sampling_curve_artifacts(
         sampling_summary["curves"],
         filename=f"{filename}_BF",
@@ -138,6 +158,38 @@ def evaluate_bf_multisol_batch(
   if extras:
     out.update(extras)
   return {k: _unpack(v) for k, v in out.items()}
+
+
+def _sample_randomized_bellman_ford_algorithm(adjacency, source_nodes, rng):
+  return [
+      _randomized_bellman_ford_tree(np.asarray(graph), int(source), rng)
+      for graph, source in zip(adjacency, source_nodes)
+  ]
+
+
+def _randomized_bellman_ford_tree(adjacency, source, rng):
+  n = adjacency.shape[0]
+  d = np.zeros(n)
+  pi = np.arange(n, dtype=int)
+  msk = np.zeros(n)
+  d[source] = 0
+  msk[source] = 1
+
+  shuffled_sources = rng.permutation(n)
+  shuffled_targets = rng.permutation(n)
+  while True:
+    prev_d = np.copy(d)
+    prev_msk = np.copy(msk)
+    for u in shuffled_sources:
+      for v in shuffled_targets:
+        if prev_msk[u] == 1 and adjacency[u, v] != 0:
+          if msk[v] == 0 or prev_d[u] + adjacency[u, v] < d[v]:
+            d[v] = prev_d[u] + adjacency[u, v]
+            pi[v] = int(u)
+          msk[v] = 1
+    if np.all(d == prev_d):
+      break
+  return pi
 
 
 def _unpack(v):

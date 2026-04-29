@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from typing import Callable, Dict, Iterable, Mapping
+from typing import Callable, Dict, Iterable, Mapping, Tuple
 
 import numpy as np
 
@@ -24,6 +24,7 @@ def summarize_samples(
     source_nodes: Iterable[int],
     samples: np.ndarray,
     validate_fn: Callable[[np.ndarray, object, int], bool],
+    curve_max_graphs: int | None = None,
 ) -> Dict[str, object]:
   """Summarize validity and diversity for sampled parent trees."""
   adjacency = np.asarray(adjacency)
@@ -61,13 +62,14 @@ def summarize_samples(
     valid_unique_fractions.append(
         valid_unique_count / unique_count if unique_count else 0.0)
     valid_fractions.append(valid_count / n_samples if n_samples else 0.0)
-    curve_rows.extend(_curve_rows_for_graph(
-        graph_ix=graph_ix,
-        adjacency=adjacency[graph_ix],
-        source=int(source_nodes[graph_ix]),
-        samples=graph_samples,
-        sample_valids=sample_valids,
-    ))
+    if curve_max_graphs is None or graph_ix < curve_max_graphs:
+      curve_rows.extend(_curve_rows_for_graph(
+          graph_ix=graph_ix,
+          adjacency=adjacency[graph_ix],
+          source=int(source_nodes[graph_ix]),
+          samples=graph_samples,
+          sample_valids=sample_valids,
+      ))
 
   return {
       "uniques": unique_fractions,
@@ -89,6 +91,7 @@ def evaluate_sampling_methods(
     source_nodes: Iterable[int],
     validate_fn: Callable[[np.ndarray, object, int], bool],
     n_samples: int,
+    curve_max_graphs: int | None = None,
 ) -> Dict[str, object]:
   """Evaluate all model/target sampling methods with shared metrics."""
   result_dict = {}
@@ -104,6 +107,7 @@ def evaluate_sampling_methods(
           source_nodes=source_nodes,
           samples=samples,
           validate_fn=validate_fn,
+          curve_max_graphs=curve_max_graphs,
       )
       prefix = f"{method_name}_{value_name}"
       result_dict[f"{prefix}_Uniques"] = summary["uniques"]
@@ -141,6 +145,7 @@ def evaluate_mixed_sampling_methods(
     source_nodes: Iterable[int],
     validate_fn: Callable[[np.ndarray, object, int], bool],
     n_samples: int,
+    curve_max_graphs: int | None = None,
 ) -> Dict[str, object]:
   """Evaluate methods whose model/target call signatures differ."""
   result_dict = {}
@@ -159,6 +164,7 @@ def evaluate_mixed_sampling_methods(
           source_nodes=source_nodes,
           samples=samples,
           validate_fn=validate_fn,
+          curve_max_graphs=curve_max_graphs,
       )
       prefix = f"{method_name}_{value_name}"
       result_dict[f"{prefix}_Uniques"] = summary["uniques"]
@@ -178,6 +184,61 @@ def evaluate_mixed_sampling_methods(
         row["Method"] = method_name
         row["Source"] = value_name
         curve_rows.append(row)
+
+  return {
+      "result_dict": result_dict,
+      "scalar_metrics": scalar_metrics,
+      "curves": curve_rows,
+  }
+
+
+def evaluate_sampling_sources(
+    *,
+    sources: Mapping[Tuple[str, str], Tuple[Callable[[object], object], object]],
+    adjacency: np.ndarray,
+    source_nodes: Iterable[int],
+    validate_fn: Callable[[np.ndarray, object, int], bool],
+    n_samples: int,
+    curve_max_graphs: int | None = None,
+) -> Dict[str, object]:
+  """Evaluate arbitrary sampling sources with the shared curve machinery.
+
+  `sources` maps `(method_name, source_name)` to `(sample_fn, sample_input)`.
+  This is intended for Appendix-C style comparators such as repeated symbolic
+  randomized algorithm runs, which do not naturally fit the Model/True pairing.
+  """
+  result_dict = {}
+  scalar_metrics = {}
+  curve_rows = []
+  n_samples = max(1, int(n_samples))
+
+  for (method_name, source_name), (sample_fn, sample_input) in sources.items():
+    samples = sample_n(sample_fn, sample_input, n_samples)
+    summary = summarize_samples(
+        adjacency=adjacency,
+        source_nodes=source_nodes,
+        samples=samples,
+        validate_fn=validate_fn,
+        curve_max_graphs=curve_max_graphs,
+    )
+    prefix = f"{method_name}_{source_name}"
+    result_dict[f"{prefix}_Uniques"] = summary["uniques"]
+    result_dict[f"{prefix}_Valids_Uniques"] = summary["valids_uniques"]
+    result_dict[f"{prefix}_Valids"] = summary["valids"]
+    result_dict[f"{prefix}_Unique_Counts"] = summary["unique_counts"]
+    result_dict[f"{prefix}_Valid_Unique_Counts"] = summary[
+        "valid_unique_counts"]
+    result_dict[f"{prefix}_Valid_Counts"] = summary["valid_counts"]
+    scalar_metrics[f"{prefix}_Uniqueness"] = _mean(summary["uniques"])
+    scalar_metrics[f"{prefix}_Valid_Unique"] = _mean(
+        summary["valids_uniques"])
+    scalar_metrics[f"{prefix}_Valid"] = _mean(summary["valids"])
+
+    for row in summary["curves"]:
+      row = dict(row)
+      row["Method"] = method_name
+      row["Source"] = source_name
+      curve_rows.append(row)
 
   return {
       "result_dict": result_dict,
@@ -285,8 +346,11 @@ def _curve_rows_for_graph(
   rows = []
   for sample_ix, tree in enumerate(samples, start=1):
     key = tuple(np.asarray(tree).astype(int).tolist())
+    sample_unique = key not in seen
     seen.add(key)
-    if sample_valids[sample_ix - 1]:
+    sample_valid = bool(sample_valids[sample_ix - 1])
+    sample_valid_unique = sample_valid and key not in seen_valid
+    if sample_valid:
       valid_count += 1
       seen_valid.add(key)
     reuse = edge_reuse_stats(samples[:sample_ix], adjacency.shape[0])
@@ -294,6 +358,11 @@ def _curve_rows_for_graph(
         "Graph": graph_ix,
         "Source_Node": source,
         "Samples": sample_ix,
+        "Sample_Valid": sample_valid,
+        "Sample_Unique": sample_unique,
+        "Sample_Valid_Unique": sample_valid_unique,
+        "Solution_Key": "|".join(str(item) for item in key),
+        "Parent_Tree": list(key),
         "Cumulative_Unique": len(seen),
         "Cumulative_Valid": valid_count,
         "Cumulative_Valid_Unique": len(seen_valid),

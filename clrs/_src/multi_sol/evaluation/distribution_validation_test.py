@@ -154,6 +154,40 @@ class DistributionValidationTest(unittest.TestCase):
     self.assertEqual(self.calls["plot_dfs_reuse"], (["e"], 4, "results/run-2"))
     self.assertEqual(self.calls["plot_dfs_line"], (["e"], 4, "results/run-2"))
 
+  def test_sampling_sources_include_per_sample_rows_and_graph_limit(self):
+    module = self._load_module_with_stubs()
+    adjacency = np.ones((2, 3, 3))
+    source_nodes = np.asarray([0, 0])
+    calls = []
+
+    def _sample(_unused):
+      calls.append(1)
+      if len(calls) == 1:
+        return np.asarray([[0, 0, 1], [0, 1, 1]])
+      return np.asarray([[0, 0, 2], [0, 2, 1]])
+
+    def _validate(_adjacency, tree, _source):
+      return int(tree[0]) == 0
+
+    out = module.evaluate_sampling_sources(
+        sources={("BFS", "Algorithm"): (_sample, None)},
+        adjacency=adjacency,
+        source_nodes=source_nodes,
+        validate_fn=_validate,
+        n_samples=2,
+        curve_max_graphs=1,
+    )
+
+    self.assertEqual(len(out["curves"]), 2)
+    self.assertEqual(out["curves"][0]["Graph"], 0)
+    self.assertEqual(out["curves"][0]["Sample_Valid"], True)
+    self.assertEqual(out["curves"][0]["Sample_Unique"], True)
+    self.assertEqual(out["curves"][0]["Sample_Valid_Unique"], True)
+    self.assertEqual(out["curves"][0]["Solution_Key"], "0|0|1")
+    self.assertEqual(out["curves"][0]["Parent_Tree"], [0, 0, 1])
+    self.assertEqual(out["curves"][1]["Cumulative_Valid_Unique"], 2)
+    self.assertIn("BFS_Algorithm_Valid_Unique", out["scalar_metrics"])
+
 
 if __name__ == "__main__":
   unittest.main()

@@ -27,6 +27,7 @@ def evaluate_mst_prim_multisol_batch(
     vd_flag=False,
     NSE=100,
     output_dir=".",
+    curve_max_graphs=None,
 ) -> Dict[str, float]:
   """Collect, evaluate, sample, validate and save MST-Prim results."""
   processed_samples = 0
@@ -127,9 +128,28 @@ def evaluate_mst_prim_multisol_batch(
       source_nodes=source_nodes,
       validate_fn=mst_validation.check_valid_mst_prim_tree,
       n_samples=NSE,
+      curve_max_graphs=curve_max_graphs,
   )
   result_dict.update(sampling_summary["result_dict"])
   if vd_flag:
+    algorithm_rng = np.random.default_rng()
+    algorithm_summary = distribution_validation.evaluate_sampling_sources(
+        sources={
+            ("Prim", "Algorithm"): (
+                lambda _data: _sample_randomized_prim_algorithm(
+                    adjacency, source_nodes, algorithm_rng),
+                None,
+            ),
+        },
+        adjacency=adjacency,
+        source_nodes=source_nodes,
+        validate_fn=mst_validation.check_valid_mst_prim_tree,
+        n_samples=NSE,
+        curve_max_graphs=curve_max_graphs,
+    )
+    result_dict.update(algorithm_summary["result_dict"])
+    sampling_summary["curves"].extend(algorithm_summary["curves"])
+    out.update(algorithm_summary["scalar_metrics"])
     distribution_validation.save_sampling_curve_artifacts(
         sampling_summary["curves"],
         filename=f"{filename}_MSTPrim",
@@ -142,6 +162,42 @@ def evaluate_mst_prim_multisol_batch(
   if extras:
     out.update(extras)
   return {k: _unpack(v) for k, v in out.items()}
+
+
+def _sample_randomized_prim_algorithm(adjacency, source_nodes, rng):
+  return [
+      _randomized_prim_tree(np.asarray(graph), int(source), rng)
+      for graph, source in zip(adjacency, source_nodes)
+  ]
+
+
+def _randomized_prim_tree(adjacency, source, rng):
+  n = adjacency.shape[0]
+  key = np.zeros(n)
+  mark = np.zeros(n)
+  in_queue = np.zeros(n)
+  pi = np.arange(n, dtype=int)
+  key[source] = 0
+  in_queue[source] = 1
+
+  for _ in range(n):
+    effective_keys = np.where(in_queue == 1, key, np.inf)
+    min_key_val = np.min(effective_keys)
+    if np.isinf(min_key_val):
+      break
+    candidates = np.where(effective_keys == min_key_val)[0]
+    u = int(rng.choice(candidates))
+    if in_queue[u] == 0:
+      break
+    mark[u] = 1
+    in_queue[u] = 0
+    for v in range(n):
+      if adjacency[u, v] != 0:
+        if mark[v] == 0 and (in_queue[v] == 0 or adjacency[u, v] < key[v]):
+          pi[v] = u
+          key[v] = adjacency[u, v]
+          in_queue[v] = 1
+  return pi
 
 
 def _unpack(v):

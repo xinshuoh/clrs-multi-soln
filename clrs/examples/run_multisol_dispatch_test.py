@@ -344,6 +344,7 @@ class RunMultisolDispatchTest(absltest.TestCase):
     defaults = self._run_flag_defaults()
     self.assertEqual(defaults["evaluation_profile"], "default")
     self.assertEqual(defaults["val_evaluation_profile"], "default")
+    self.assertEqual(defaults["run_mode"], "train_eval")
     self.assertIs(defaults["save_sampling_artifacts"], False)
     self.assertEqual(defaults["sampling_artifact_prefix"], "sampling_eval")
     self.assertEqual(defaults["run_dir"], "")
@@ -351,8 +352,11 @@ class RunMultisolDispatchTest(absltest.TestCase):
     self.assertIs(defaults["results_df"], False)
     self.assertIs(defaults["save_df"], False)
     self.assertIs(defaults["save_model_to_file"], False)
+    self.assertEqual(defaults["model_filename"], "")
+    self.assertEqual(defaults["load_models_from_dir"], "")
     self.assertIs(defaults["validate_distributions"], False)
     self.assertEqual(defaults["NSE"], 25)
+    self.assertEqual(defaults["distribution_validation_graphs"], 0)
     self.assertIsNone(defaults["test_length"])
 
   def test_run_source_resolves_checkpoint_default_under_run_dir(self):
@@ -362,6 +366,15 @@ class RunMultisolDispatchTest(absltest.TestCase):
     self.assertIn("checkpoint_flag = FLAGS['checkpoint_path']", source)
     self.assertIn("if checkpoint_flag.present", source)
     self.assertIn("os.path.join(run_dir, 'checkpoints')", source)
+
+  def test_run_source_supports_train_eval_model_layout(self):
+    run_path = pathlib.Path(__file__).resolve().with_name("run.py")
+    source = run_path.read_text(encoding="utf-8")
+    self.assertIn("def _resolve_model_load_path", source)
+    self.assertIn("FLAGS.load_models_from_dir", source)
+    self.assertIn("f'seed_{seed}'", source)
+    self.assertIn("FLAGS.run_mode == 'train'", source)
+    self.assertIn("return []", source)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from typing import Dict
 
 import clrs
 import jax
+import numpy as np
 
 from clrs._src.multi_sol.data.adapters import concat_tree
 from clrs._src.multi_sol.evaluation import distribution_validation
@@ -25,6 +26,7 @@ def evaluate_dfs_multisol_batch(
     vd_flag=False,
     NSE=100,
     output_dir=".",
+    curve_max_graphs=None,
 ) -> Dict[str, float]:
   """Collect, evaluate, sample, validate and save DFS multi-solution results."""
   processed_samples = 0
@@ -116,9 +118,28 @@ def evaluate_dfs_multisol_batch(
       source_nodes=source_nodes,
       validate_fn=validate_fn,
       n_samples=NSE,
+      curve_max_graphs=curve_max_graphs,
   )
   result_dict.update(sampling_summary["result_dict"])
   if vd_flag:
+    algorithm_rng = np.random.default_rng()
+    algorithm_summary = distribution_validation.evaluate_sampling_sources(
+        sources={
+            ("DFS", "Algorithm"): (
+                lambda _data: _sample_randomized_dfs_algorithm(
+                    adjacency, algorithm_rng),
+                None,
+            ),
+        },
+        adjacency=adjacency,
+        source_nodes=source_nodes,
+        validate_fn=validate_fn,
+        n_samples=NSE,
+        curve_max_graphs=curve_max_graphs,
+    )
+    result_dict.update(algorithm_summary["result_dict"])
+    sampling_summary["curves"].extend(algorithm_summary["curves"])
+    out.update(algorithm_summary["scalar_metrics"])
     distribution_validation.save_sampling_curve_artifacts(
         sampling_summary["curves"],
         filename=f"{filename}_DFS",
@@ -131,6 +152,49 @@ def evaluate_dfs_multisol_batch(
   if extras:
     out.update(extras)
   return {k: _unpack(v) for k, v in out.items()}
+
+
+def _sample_randomized_dfs_algorithm(adjacency, rng):
+  return [
+      _randomized_dfs_tree(np.asarray(graph), rng)
+      for graph in adjacency
+  ]
+
+
+def _randomized_dfs_tree(adjacency, rng):
+  n = adjacency.shape[0]
+  color = np.zeros(n, dtype=np.int32)
+  pi = np.arange(n, dtype=int)
+  s_prev = np.arange(n, dtype=int)
+  shuffled = rng.permutation(n)
+
+  for s in range(n):
+    if color[s] != 0:
+      continue
+    s_last = s
+    u = s
+    while True:
+      if color[u] == 0:
+        color[u] = 1
+
+      for v in shuffled:
+        if adjacency[u, v] != 0 and color[v] == 0:
+          pi[v] = u
+          color[v] = 1
+          s_prev[v] = s_last
+          s_last = v
+          break
+
+      if s_last == u:
+        color[u] = 2
+        if s_prev[u] == u:
+          break
+        parent = s_prev[s_last]
+        s_prev[s_last] = s_last
+        s_last = parent
+
+      u = s_last
+  return pi
 
 
 def _unpack(v):

@@ -98,6 +98,12 @@ class DfsPluginTest(unittest.TestCase):
             "scalar_metrics": {"Upwards_Model_Uniqueness": 1.0},
             "curves": [{"Samples": 1}],
         })
+    dist_validation_module.evaluate_sampling_sources = (
+        lambda **kwargs: {
+            "result_dict": {"DFS_Algorithm_Uniques": [1.0]},
+            "scalar_metrics": {"DFS_Algorithm_Uniqueness": 1.0},
+            "curves": [{"Samples": 1, "Source": "Algorithm"}],
+        })
     dist_validation_module.save_sampling_curve_artifacts = (
         lambda *args, **kwargs: None)
     self._install_module(
@@ -161,6 +167,13 @@ class DfsPluginTest(unittest.TestCase):
             "scalar_metrics": {"Upwards_Model_Uniqueness": 1.0},
             "curves": [{"Samples": 1}],
         })
+    captured_algorithm_sampling = {}
+    plugin.distribution_validation.evaluate_sampling_sources = (
+        lambda **kwargs: captured_algorithm_sampling.update(kwargs) or {
+            "result_dict": {"DFS_Algorithm_Uniques": [1.0]},
+            "scalar_metrics": {"DFS_Algorithm_Uniqueness": 1.0},
+            "curves": [{"Samples": 1, "Source": "Algorithm"}],
+        })
     captured_curves = {}
     plugin.distribution_validation.save_sampling_curve_artifacts = (
         lambda curves, **kwargs: captured_curves.update(
@@ -206,8 +219,10 @@ class DfsPluginTest(unittest.TestCase):
     self.assertEqual(out["score"], 0.66)
     self.assertEqual(out["phase"], "ok")
     self.assertEqual(captured_sampling["n_samples"], 42)
+    self.assertEqual(captured_algorithm_sampling["n_samples"], 42)
     self.assertEqual(captured_curves["output_dir"], "results/run-7")
     self.assertEqual(captured_curves["filename"], "dfs_case_DFS")
+    self.assertEqual(len(captured_curves["curves"]), 2)
     np.testing.assert_array_equal(captured_sampling["adjacency"], adjacency)
 
 

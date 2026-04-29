@@ -160,6 +160,13 @@ flags.DEFINE_string(
     'run_dir',
     '',
     'Output directory for this run. Default: results/<timestamp>/.')
+flags.DEFINE_enum(
+    'run_mode',
+    'train_eval',
+    ['train_eval', 'train', 'eval'],
+    'Execution mode. train_eval preserves legacy behavior, train trains and '
+    'saves models without final test evaluation, and eval loads saved models '
+    'and runs test evaluation only.')
 flags.DEFINE_string(
     'filename',
     '',
@@ -185,10 +192,20 @@ flags.DEFINE_string(
     '',
     'Output path for --save_model_to_file (default derived from --filename).')
 flags.DEFINE_string(
+    'model_filename',
+    '',
+    'Filename for saved or loaded per-seed models, relative to each seed run '
+    'directory or seed model directory. For train mode, defaults to model.pkl.')
+flags.DEFINE_string(
     'load_model_from_file',
     '',
     'Load a saved model .pkl from this path and run evaluation only. Requires '
     '--train_steps=0.')
+flags.DEFINE_string(
+    'load_models_from_dir',
+    '',
+    'Load per-seed models from this directory for evaluation. With --seeds, '
+    'seed N loads <load_models_from_dir>/seed_N/<model_filename>.')
 flags.DEFINE_boolean(
     'validate_distributions',
     False,
@@ -197,6 +214,12 @@ flags.DEFINE_integer(
     'NSE',
     25,
     'Legacy-compatible number of extracted solutions for distribution validation.')
+flags.DEFINE_integer(
+    'distribution_validation_graphs',
+    0,
+    'Number of test graphs to include in saved distribution-validation curve '
+    'artifacts. Use 10 for Appendix-C style plots. A value <= 0 uses all '
+    'evaluated test graphs.')
 
 FLAGS = flags.FLAGS
 
@@ -360,6 +383,7 @@ def create_samplers(
     train_batch_size: int = 32,
     val_batch_size: int = 32,
     test_batch_size: int = 32,
+    create_test_samplers: bool = True,
 ):
   """Create samplers for training, validation and testing.
 
@@ -375,6 +399,8 @@ def create_samplers(
     train_batch_size: batch size for training samplers.
     val_batch_size: batch size for validation samplers.
     test_batch_size: batch size for test samplers.
+    create_test_samplers: Whether to build test samplers. Disable for
+      train-only runs to avoid unnecessary test dataset construction.
 
   Returns:
     Tuple of:
@@ -461,17 +487,22 @@ def create_samplers(
           sampler_kwargs=sampler_kwargs,
           **common_sampler_args,
       )
-      val_sampler, val_samples, _ = make_multi_sampler(**val_args)
+      val_sampler, val_samples, val_spec = make_multi_sampler(**val_args)
 
-      test_args = dict(sizes=test_lengths or [-1],
-                       split='test',
-                       batch_size=test_batch_size,
-                       multiplier=2 * mult,
-                       randomize_pos=False,
-                       chunked=False,
-                       sampler_kwargs={},
-                       **common_sampler_args)
-      test_sampler, test_samples, spec = make_multi_sampler(**test_args)
+      if create_test_samplers:
+        test_args = dict(sizes=test_lengths or [-1],
+                         split='test',
+                         batch_size=test_batch_size,
+                         multiplier=2 * mult,
+                         randomize_pos=False,
+                         chunked=False,
+                         sampler_kwargs={},
+                         **common_sampler_args)
+        test_sampler, test_samples, spec = make_multi_sampler(**test_args)
+      else:
+        test_sampler = None
+        test_samples = 0
+        spec = val_spec
 
     spec_list.append(spec)
     train_samplers.append(train_sampler)
@@ -522,6 +553,10 @@ def _extension_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
       'vd_flag': FLAGS.validate_distributions,
       'NSE': FLAGS.NSE,
       'output_dir': run_dir,
+      'curve_max_graphs': (
+          FLAGS.distribution_validation_graphs
+          if FLAGS.distribution_validation_graphs > 0 else None
+      ),
   }
   if split == 'test' and FLAGS.filename:
     kwargs['filename'] = FLAGS.filename
@@ -553,9 +588,30 @@ def _default_results_df_filename() -> str:
 def _default_model_output_path(run_dir: str) -> str:
   if FLAGS.model_output_path:
     return FLAGS.model_output_path
+  if FLAGS.model_filename:
+    return os.path.join(run_dir, FLAGS.model_filename)
   if FLAGS.filename:
     return os.path.join(run_dir, f'{FLAGS.filename}_model.pkl')
+  if FLAGS.run_mode == 'train':
+    return os.path.join(run_dir, 'model.pkl')
   return os.path.join(run_dir, 'eval_model.pkl')
+
+
+def _model_filename_for_loading() -> str:
+  return FLAGS.model_filename or 'model.pkl'
+
+
+def _resolve_model_load_path(seed: int) -> str:
+  if FLAGS.load_model_from_file:
+    return FLAGS.load_model_from_file
+  if FLAGS.load_models_from_dir:
+    return os.path.join(
+        FLAGS.load_models_from_dir, f'seed_{seed}', _model_filename_for_loading())
+  return ''
+
+
+def _should_save_model() -> bool:
+  return FLAGS.save_model_to_file or FLAGS.run_mode == 'train'
 
 
 def _resolve_checkpoint_path(run_dir: str) -> str:
@@ -622,9 +678,89 @@ def _save_seed_summary(test_rows, run_dir: str) -> None:
   )
 
 
+def _save_seed_curve_summary(run_dir: str) -> None:
+  """Aggregate per-seed distribution-validation curve artifacts."""
+  curve_paths = []
+  for root, _, files in os.walk(run_dir):
+    if not os.path.basename(root).startswith('seed_'):
+      continue
+    for file_name in files:
+      if file_name.endswith('_curves.csv'):
+        curve_paths.append(os.path.join(root, file_name))
+  if not curve_paths:
+    return
+
+  import pandas as pd  # Lazy import; only needed for curve aggregation.
+
+  frames = []
+  for path in sorted(curve_paths):
+    frame = pd.read_csv(path)
+    seed_dir = os.path.basename(os.path.dirname(path))
+    try:
+      seed = int(seed_dir.removeprefix('seed_'))
+    except ValueError:
+      seed = seed_dir
+    frame['Seed'] = seed
+    frame['Artifact'] = os.path.basename(path).removesuffix('_curves.csv')
+    frames.append(frame)
+
+  combined = pd.concat(frames, ignore_index=True)
+  raw_path = os.path.join(run_dir, 'seed-curve-results.csv')
+  combined.to_csv(raw_path, index=False)
+
+  value_cols = [
+      col for col in (
+          'Cumulative_Unique',
+          'Cumulative_Valid',
+          'Cumulative_Valid_Unique',
+          'Edge_Reuse_Mean',
+          'Edge_Reuse_Median',
+      )
+      if col in combined.columns
+  ]
+  if not value_cols:
+    return
+
+  group_cols = [
+      col for col in ('Artifact', 'Method', 'Source', 'Samples')
+      if col in combined.columns
+  ]
+  summary = (
+      combined.groupby(group_cols)[value_cols]
+      .agg(['mean', 'std'])
+      .reset_index()
+  )
+  summary.columns = [
+      '_'.join(str(part) for part in col if part)
+      if isinstance(col, tuple)
+      else col
+      for col in summary.columns
+  ]
+  summary_path = os.path.join(run_dir, 'seed-curve-summary.csv')
+  summary.to_csv(summary_path, index=False)
+
+
 def main(unused_argv):
   base_run_dir = _resolve_run_dir()
   seeds = _resolve_seed_list()
+  if FLAGS.load_model_from_file and FLAGS.load_models_from_dir:
+    raise ValueError(
+        'Use only one of --load_model_from_file and --load_models_from_dir.')
+  if FLAGS.load_model_from_file and len(seeds) > 1:
+    raise ValueError(
+        '--load_model_from_file points at one model. Use --load_models_from_dir '
+        'for multi-seed evaluation.')
+  if FLAGS.run_mode == 'eval':
+    if FLAGS.train_steps != 0:
+      raise ValueError('--run_mode=eval requires --train_steps=0.')
+    if not FLAGS.load_model_from_file and not FLAGS.load_models_from_dir:
+      raise ValueError(
+          '--run_mode=eval requires --load_model_from_file or '
+          '--load_models_from_dir.')
+  if FLAGS.run_mode == 'train':
+    if FLAGS.load_model_from_file or FLAGS.load_models_from_dir:
+      raise ValueError('--run_mode=train cannot be combined with model loading.')
+
   all_test_rows = []
   for seed in seeds:
     run_dir = _seed_run_dir(base_run_dir, seed, len(seeds) > 1)
@@ -632,13 +768,15 @@ def main(unused_argv):
     all_test_rows.extend(_run_single_seed(seed=seed, run_dir=run_dir))
   if len(seeds) > 1:
     _save_seed_summary(all_test_rows, base_run_dir)
+    _save_seed_curve_summary(base_run_dir)
   logging.info('Done!')
 
 
 def _run_single_seed(seed: int, run_dir: str):
-  if FLAGS.load_model_from_file and FLAGS.train_steps != 0:
+  model_load_path = _resolve_model_load_path(seed)
+  if model_load_path and FLAGS.train_steps != 0:
     raise ValueError(
-        '--load_model_from_file is evaluation-only. Set --train_steps=0.')
+        'Model loading is evaluation-only. Set --train_steps=0.')
 
   if FLAGS.hint_mode == 'encoded_decoded':
     encode_hints = True
@@ -659,8 +797,11 @@ def _run_single_seed(seed: int, run_dir: str):
   validation_profile = _effective_validation_profile()
   logging.info('Run output directory: %s', run_dir)
   logging.info('Checkpoint directory: %s', checkpoint_path)
+  logging.info('Run mode: %s', FLAGS.run_mode)
   logging.info('Validation evaluation profile: %s', validation_profile)
   logging.info('Test evaluation profile: %s', effective_profile)
+  if model_load_path:
+    logging.info('Model load path: %s', model_load_path)
   if effective_profile != FLAGS.evaluation_profile:
     logging.info(
         'Using compatibility test evaluation profile "%s" (requested "%s").',
@@ -688,6 +829,7 @@ def _run_single_seed(seed: int, run_dir: str):
       val_lengths=[np.amax(train_lengths)],
       test_lengths=test_lengths,
       train_batch_size=FLAGS.batch_size,
+      create_test_samplers=FLAGS.run_mode != 'train',
   )
 
   processor_factory = clrs.get_processor_factory(
@@ -852,13 +994,26 @@ def _run_single_seed(seed: int, run_dir: str):
   if FLAGS.train_steps == 0 and eval_model.params is None:
     logging.info('No training steps requested, evaluation only. Initialising model...')
     eval_model.init([next(t).features for t in val_samplers], seed + 1)
-  if FLAGS.load_model_from_file:
-    logging.info('Loading model from %s', FLAGS.load_model_from_file)
-    eval_model.restore_model_from_file(
-        FLAGS.load_model_from_file, only_load_processor=False)
+  if model_load_path:
+    logging.info('Loading model from %s', model_load_path)
+    eval_model.restore_model_from_file(model_load_path, only_load_processor=False)
   if saved_best_checkpoint:
     logging.info('Restoring best model from checkpoint...')
     eval_model.restore_model('best.pkl', only_load_processor=False)
+
+  if FLAGS.save_df and collect_results_df:
+    multisol_reporting.save_csv_report(
+        metric_rows,
+        _default_results_df_filename(),
+        output_dir=run_dir,
+        timestamped=False,
+    )
+
+  if _should_save_model():
+    eval_model.save_model_to_permanent_file(_default_model_output_path(run_dir))
+
+  if FLAGS.run_mode == 'train':
+    return []
 
   test_rows = []
   for algo_idx in range(len(train_samplers)):
@@ -892,17 +1047,6 @@ def _run_single_seed(seed: int, run_dir: str):
     test_row['Algorithm'] = FLAGS.algorithms[algo_idx]
     test_row['Seed'] = int(seed)
     test_rows.append(test_row)
-
-  if FLAGS.save_df and collect_results_df:
-    multisol_reporting.save_csv_report(
-        metric_rows,
-        _default_results_df_filename(),
-        output_dir=run_dir,
-        timestamped=False,
-    )
-
-  if FLAGS.save_model_to_file:
-    eval_model.save_model_to_permanent_file(_default_model_output_path(run_dir))
 
   return test_rows
 
