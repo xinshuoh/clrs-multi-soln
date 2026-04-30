@@ -116,6 +116,14 @@ class MultiSolRegistryTest(absltest.TestCase):
       self.assertIsNotNone(extension.solution_space.validation_method)
       self.assertNotEmpty(extension.solution_space.extraction_methods)
 
+  def test_builtin_extensions_expose_training_distributions(self):
+    for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
+      extension = registry.get_extension(name)
+      self.assertIsNotNone(extension)
+      self.assertEqual(extension.training_distribution.num_solutions, 20)
+      self.assertEqual(extension.training_distribution.output_name, "pi")
+      self.assertIsNotNone(extension.randomized_algorithm)
+
   def test_registry_builtins_loaded_from_definition_catalog(self):
     catalog_names = {
         definition.algorithm_name

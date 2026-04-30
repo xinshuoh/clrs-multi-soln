@@ -1,17 +1,26 @@
 """Definition for the MST-Prim multi-solution algorithm."""
 
-import numpy as np
-
 from clrs._src.specs import Location, Stage, Type
+from clrs._src.multi_sol.algorithms import graphs
 from clrs._src.multi_sol.algorithms.mst_prim import generator
 from clrs._src.multi_sol.core import definitions
 from clrs._src.multi_sol.data import adapters
-from clrs._src.multi_sol.evaluation import batch_evaluation
 from clrs._src.multi_sol.evaluation import definition_evaluation
 from clrs._src.multi_sol.sampling import dfs as dfs_sampling
 from clrs._src.multi_sol.sampling import mst_prim as mst_sampling
 from clrs._src.multi_sol.validation import mst_prim as mst_validation
 from clrs._src.multi_sol import samplers
+
+
+TRAINING_DISTRIBUTION = definitions.TrainingDistribution(
+    num_solutions=20,
+    output_name="pi",
+)
+
+RANDOMIZED_ALGORITHM = definitions.RandomizedAlgorithm(
+    sample_solution=graphs.mst_prim_multi,
+    uses_source_node=True,
+)
 
 
 SPEC = {
@@ -29,75 +38,38 @@ SPEC = {
 
 
 def _sample_randomized_prim_algorithm(adjacency, source_nodes, rng):
-  return [
-      _randomized_prim_tree(np.asarray(graph), int(source), rng)
-      for graph, source in zip(adjacency, source_nodes)
-  ]
-
-
-def _randomized_prim_tree(adjacency, source, rng):
-  n = adjacency.shape[0]
-  key = np.zeros(n)
-  mark = np.zeros(n)
-  in_queue = np.zeros(n)
-  pi = np.arange(n, dtype=int)
-  key[source] = 0
-  in_queue[source] = 1
-
-  for _ in range(n):
-    effective_keys = np.where(in_queue == 1, key, np.inf)
-    min_key_val = np.min(effective_keys)
-    if np.isinf(min_key_val):
-      break
-    candidates = np.where(effective_keys == min_key_val)[0]
-    u = int(rng.choice(candidates))
-    if in_queue[u] == 0:
-      break
-    mark[u] = 1
-    in_queue[u] = 0
-    for v in range(n):
-      if adjacency[u, v] != 0:
-        if mark[v] == 0 and (in_queue[v] == 0 or adjacency[u, v] < key[v]):
-          pi[v] = u
-          key[v] = adjacency[u, v]
-          in_queue[v] = 1
-  return pi
+  return RANDOMIZED_ALGORITHM.sample_batch(adjacency, source_nodes, rng)
 
 
 SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
     batch_extractor=adapters.extract_mst_prim_graph_and_source,
     validation_method=mst_validation.check_valid_mst_prim_tree,
     extraction_methods=(
-        batch_evaluation.SamplingMethod(
+        definitions.ExtractionMethod(
             "Argmax",
             lambda data, _batch: dfs_sampling.sample_argmax_listofdict(data),
             lambda data, _batch: dfs_sampling.sample_argmax_listofdatapoint(
                 data),
         ),
-        batch_evaluation.SamplingMethod(
+        definitions.ExtractionMethod.same_sampler(
             "Random",
             lambda data, _batch: dfs_sampling.sample_random_list(data),
-            lambda data, _batch: dfs_sampling.sample_random_list(data),
         ),
-        batch_evaluation.SamplingMethod(
+        definitions.ExtractionMethod.same_sampler(
             "Tree",
             lambda data, batch: mst_sampling.sample_mst_prim_tree(
                 batch.adjacency, batch.source_nodes, data),
-            lambda data, batch: mst_sampling.sample_mst_prim_tree(
-                batch.adjacency, batch.source_nodes, data),
         ),
-        batch_evaluation.SamplingMethod(
+        definitions.ExtractionMethod.same_sampler(
             "Greedy",
-            lambda data, batch: mst_sampling.sample_mst_prim_greedy(
-                batch.adjacency, batch.source_nodes, data),
             lambda data, batch: mst_sampling.sample_mst_prim_greedy(
                 batch.adjacency, batch.source_nodes, data),
         ),
     ),
-    generator_sampling_source=batch_evaluation.AlgorithmSamplingSource(
-        "Prim",
-        "Algorithm",
-        lambda batch, rng: _sample_randomized_prim_algorithm(
+    generator_sampling_source=definitions.GeneratorSamplingSource(
+        name="Prim",
+        source_name="Algorithm",
+        sample_fn=lambda batch, rng: _sample_randomized_prim_algorithm(
             batch.adjacency, batch.source_nodes, rng),
     ),
 )
@@ -108,12 +80,22 @@ def evaluate_mst_prim_multisol_batch(**kwargs):
       definition=DEFINITION, **kwargs)
 
 
-DEFINITION = definitions.MultiSolAlgorithmDefinition(
+def algorithm_spec():
+  return SPEC
+
+
+def training_distribution():
+  return TRAINING_DISTRIBUTION
+
+
+DEFINITION = definitions.MultiSolAlgorithm(
     algorithm_name="mst_prim_multi",
     base_algorithm_name="mst_prim",
     spec=SPEC,
     sampler_class=samplers.MSTPrimMultiSampler,
     algorithm=generator.mst_prim_multi,
     evaluator=evaluate_mst_prim_multisol_batch,
+    training_distribution=TRAINING_DISTRIBUTION,
+    randomized_algorithm=RANDOMIZED_ALGORITHM,
     solution_space=SOLUTION_SPACE,
 )

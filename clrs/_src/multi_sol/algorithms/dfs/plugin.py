@@ -2,13 +2,14 @@
 
 from typing import Dict
 
+from clrs._src.multi_sol.algorithms import graphs
 from clrs._src.multi_sol.algorithms.dfs import definition
 from clrs._src.multi_sol.evaluation import batch_evaluation
 
 
 distribution_validation = batch_evaluation.distribution_validation
 _sample_randomized_dfs_algorithm = definition._sample_randomized_dfs_algorithm
-_randomized_dfs_tree = definition._randomized_dfs_tree
+_randomized_dfs_tree = graphs.dfs_multi
 _validate_dfs_tree = definition._validate_dfs_tree
 
 

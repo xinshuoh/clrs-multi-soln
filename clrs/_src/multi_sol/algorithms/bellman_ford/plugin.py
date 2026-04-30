@@ -2,6 +2,7 @@
 
 from typing import Dict
 
+from clrs._src.multi_sol.algorithms import graphs
 from clrs._src.multi_sol.algorithms.bellman_ford import definition
 from clrs._src.multi_sol.evaluation import batch_evaluation
 
@@ -9,7 +10,7 @@ from clrs._src.multi_sol.evaluation import batch_evaluation
 distribution_validation = batch_evaluation.distribution_validation
 _sample_randomized_bellman_ford_algorithm = (
     definition._sample_randomized_bellman_ford_algorithm)
-_randomized_bellman_ford_tree = definition._randomized_bellman_ford_tree
+_randomized_bellman_ford_tree = graphs.bellman_ford_multi
 
 
 def evaluate_bf_multisol_batch(

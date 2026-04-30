@@ -13,7 +13,6 @@ from clrs._src.multi_sol.algorithms import common
 
 _Array = np.ndarray
 _Out = Tuple[_Array, probing.ProbesDict]
-_NUM_SOLUTIONS = 20
 
 
 def bellman_ford_multi(
@@ -27,7 +26,6 @@ def bellman_ford_multi(
       deterministic=deterministic,
       run_single=lambda rng, algorithm_spec, deterministic: (
           _bellman_ford_execution(A, s, rng, algorithm_spec)),
-      num_solutions=_NUM_SOLUTIONS,
   )
 
 

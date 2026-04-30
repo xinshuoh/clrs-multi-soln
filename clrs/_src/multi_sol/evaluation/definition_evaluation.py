@@ -10,7 +10,7 @@ from clrs._src.multi_sol.evaluation import batch_evaluation
 
 def evaluate_definition(
     *,
-    definition: definitions.MultiSolAlgorithmDefinition,
+    definition: definitions.MultiSolAlgorithm,
     sampler,
     predict_fn,
     sample_count,
@@ -38,15 +38,37 @@ def evaluate_definition(
       extras=extras,
       batch_extractor=solution_space.batch_extractor,
       validate_fn=solution_space.validation_method,
-      sampling_methods=solution_space.extraction_methods,
+      sampling_methods=_to_sampling_methods(solution_space.extraction_methods),
       save_results_fn=save_results_fn,
       filename=filename or definition.algorithm_name,
       vd_flag=vd_flag,
       n_samples=NSE,
       output_dir=output_dir,
       curve_max_graphs=curve_max_graphs,
-      algorithm_source=solution_space.generator_sampling_source,
+      algorithm_source=_to_algorithm_source(
+          solution_space.generator_sampling_source),
       include_source_nodes=solution_space.include_source_nodes,
+  )
+
+
+def _to_sampling_methods(extraction_methods):
+  return tuple(
+      batch_evaluation.SamplingMethod(
+          method.name,
+          method.model_distribution_sample,
+          method.target_distribution_sample,
+      )
+      for method in extraction_methods
+  )
+
+
+def _to_algorithm_source(generator_sampling_source):
+  if generator_sampling_source is None:
+    return None
+  return batch_evaluation.AlgorithmSamplingSource(
+      generator_sampling_source.name,
+      generator_sampling_source.source_name,
+      generator_sampling_source.sample_fn,
   )
 
 

@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
-from clrs._src.multi_sol.core.definitions import MultiSolAlgorithmDefinition
-from clrs._src.multi_sol.core.definitions import MultiSolAlgorithmExtension
-from clrs._src.multi_sol.core.definitions import MultiSolExtensionDefinition
+from clrs._src.multi_sol.core.definitions import MultiSolAlgorithm
 
 
-_EXTENSIONS: Dict[str, MultiSolExtensionDefinition] = {}
+_EXTENSIONS: Dict[str, MultiSolAlgorithm] = {}
 _BUILTINS_REGISTERED = False
 
 
@@ -24,14 +22,14 @@ def ensure_builtin_extensions_registered() -> None:
   _BUILTINS_REGISTERED = True
 
 
-def register_extension(extension: MultiSolAlgorithmDefinition) -> None:
+def register_extension(extension: MultiSolAlgorithm) -> None:
   name = extension.algorithm_name
   if name in _EXTENSIONS:
     raise ValueError(f"Extension already registered for {name}.")
   _EXTENSIONS[name] = extension
 
 
-def get_extension(algorithm_name: str) -> Optional[MultiSolExtensionDefinition]:
+def get_extension(algorithm_name: str) -> Optional[MultiSolAlgorithm]:
   ensure_builtin_extensions_registered()
   return _EXTENSIONS.get(algorithm_name)
 

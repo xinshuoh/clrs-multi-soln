@@ -13,7 +13,6 @@ from clrs._src.multi_sol.algorithms import common
 
 _Array = np.ndarray
 _Out = Tuple[_Array, probing.ProbesDict]
-_NUM_SOLUTIONS = 20
 
 
 def dfs_multi(A: _Array, seed: int, deterministic: bool = False) -> _Out:
@@ -26,7 +25,6 @@ def dfs_multi(A: _Array, seed: int, deterministic: bool = False) -> _Out:
       deterministic=deterministic,
       run_single=lambda rng, algorithm_spec, _deterministic: _dfs_execution(
           A, rng, algorithm_spec),
-      num_solutions=_NUM_SOLUTIONS,
   )
 
 

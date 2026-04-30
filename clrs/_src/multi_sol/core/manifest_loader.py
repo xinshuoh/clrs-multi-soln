@@ -6,8 +6,8 @@ from pathlib import Path
 import tomllib
 from typing import Iterable, Tuple
 
+from clrs._src.multi_sol.core import definitions
 from clrs._src.multi_sol.core import manifest_schema
-from clrs._src.multi_sol.core import registry
 from clrs._src.multi_sol.core import symbol_loader
 from clrs._src.multi_sol import specs as multi_sol_specs
 
@@ -35,7 +35,7 @@ def _load_manifest(path: Path) -> manifest_schema.MultiSolManifest:
 
 def _build_extension(
     manifest: manifest_schema.MultiSolManifest,
-) -> registry.MultiSolExtensionDefinition:
+) -> definitions.MultiSolAlgorithm:
   try:
     spec_provider = dict(multi_sol_specs.MULTI_SOL_SPECS[manifest.algorithm_name])
   except KeyError as exc:
@@ -51,7 +51,7 @@ def _build_extension(
       else None
   )
 
-  return registry.MultiSolExtensionDefinition(
+  return definitions.MultiSolAlgorithm(
       algorithm_name=manifest.algorithm_name,
       base_algorithm_name=manifest.base_algorithm_name,
       spec=spec_provider,
@@ -63,7 +63,7 @@ def _build_extension(
 
 def load_manifest_extensions(
     manifest_dir: Path | None = None,
-) -> Tuple[registry.MultiSolExtensionDefinition, ...]:
+) -> Tuple[definitions.MultiSolAlgorithm, ...]:
   """Load all extensions declared in TOML manifests."""
   return tuple(
       _build_extension(_load_manifest(path))
