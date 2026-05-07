@@ -16,8 +16,10 @@
 """Run training of one or more algorithmic tasks from CLRS."""
 
 import functools
+import hashlib
 from datetime import datetime
 import os
+import pickle
 import shutil
 from typing import Any, Dict, List, Optional
 
@@ -46,6 +48,26 @@ flags.DEFINE_integer(
     'test_length',
     None,
     'Legacy alias for single test size; overrides --test_lengths when set.')
+flags.DEFINE_string(
+    'test_dataset_cache_dir',
+    '',
+    'Directory for cached generated positive-length test datasets. Empty '
+    'disables caching. Benchmark test datasets already use the CLRS dataset.')
+flags.DEFINE_integer(
+    'test_dataset_seed',
+    0,
+    'Seed used to generate cached positive-length test datasets. This is '
+    'independent of the model seed so repeated model seeds can evaluate on '
+    'the same test graphs.')
+flags.DEFINE_integer(
+    'test_num_samples',
+    0,
+    'Override the number of generated positive-length test graphs. A value '
+    '<= 0 preserves the CLRS default adjusted by the algorithm multiplier.')
+flags.DEFINE_boolean(
+    'refresh_test_dataset_cache',
+    False,
+    'Regenerate and overwrite cached positive-length test datasets.')
 flags.DEFINE_integer('length_needle', -8,
                      'Length of needle for training and validation '
                      '(not testing) in string matching algorithms. '
@@ -251,6 +273,121 @@ def _iterate_sampler(sampler, batch_size):
     yield sampler.next(batch_size)
 
 
+def _test_num_samples(split: str, multiplier: int) -> int:
+  """Returns the finite positive-length sample count for a split."""
+  num_samples = clrs.CLRS30[split]['num_samples'] * multiplier
+  if split == 'test' and FLAGS.test_num_samples > 0:
+    num_samples = FLAGS.test_num_samples
+  return num_samples
+
+
+def _cache_kwargs_id(sampler_kwargs: Dict[str, Any]) -> str:
+  """Stable short id for sampler kwargs that affect generated examples."""
+  kwargs_repr = repr(sorted(sampler_kwargs.items())).encode('utf-8')
+  return hashlib.sha256(kwargs_repr).hexdigest()[:8]
+
+
+def _cached_test_dataset_path(cache_dir: str,
+                              algorithm: str,
+                              length: int,
+                              num_samples: int,
+                              seed: int,
+                              sampler_kwargs: Dict[str, Any]) -> str:
+  safe_algorithm = algorithm.replace(os.sep, '_')
+  kwargs_id = _cache_kwargs_id(sampler_kwargs)
+  return os.path.join(
+      cache_dir,
+      safe_algorithm,
+      f'test_length_{length}',
+      f'seed_{seed}_n{num_samples}_kwargs_{kwargs_id}.pkl',
+  )
+
+
+def _slice_feedback(feedback, indices):
+  """Slices a Feedback object along its batch axis."""
+  inputs = jax.tree_util.tree_map(
+      lambda x: np.take(x, indices, axis=0), feedback.features.inputs)
+  outputs = jax.tree_util.tree_map(
+      lambda x: np.take(x, indices, axis=0), feedback.outputs)
+  hints = jax.tree_util.tree_map(
+      lambda x: np.take(x, indices, axis=1), feedback.features.hints)
+  features = feedback.features._replace(
+      inputs=inputs,
+      hints=hints,
+      lengths=np.take(feedback.features.lengths, indices, axis=0),
+  )
+  return feedback._replace(features=features, outputs=outputs)
+
+
+def _iterate_cached_feedback(feedback, batch_size: int):
+  """Yields deterministic sequential batches from cached finite feedback."""
+  num_samples = int(feedback.features.lengths.shape[0])
+  start = 0
+  while True:
+    end = min(start + batch_size, num_samples)
+    yield _slice_feedback(feedback, np.arange(start, end))
+    start = end
+    if start >= num_samples:
+      start = 0
+
+
+def _load_or_create_cached_test_feedback(algorithm: str,
+                                         length: int,
+                                         num_samples: int,
+                                         sampler_kwargs: Dict[str, Any]):
+  """Loads or creates a fixed positive-length test dataset."""
+  cache_path = _cached_test_dataset_path(
+      FLAGS.test_dataset_cache_dir,
+      algorithm,
+      length,
+      num_samples,
+      FLAGS.test_dataset_seed,
+      sampler_kwargs,
+  )
+  if os.path.exists(cache_path) and not FLAGS.refresh_test_dataset_cache:
+    logging.info('Loading cached test dataset from %s', cache_path)
+    with open(cache_path, 'rb') as f:
+      payload = pickle.load(f)
+    return payload['feedback'], payload['spec']
+
+  logging.info(
+      'Creating cached test dataset for %s length %d with %d samples '
+      'and dataset seed %d at %s',
+      algorithm,
+      length,
+      num_samples,
+      FLAGS.test_dataset_seed,
+      cache_path,
+  )
+  sampler, spec = clrs.build_sampler(
+      algorithm,
+      seed=FLAGS.test_dataset_seed,
+      num_samples=num_samples,
+      length=length,
+      **sampler_kwargs,
+  )
+  feedback = sampler.next(batch_size=None)
+  os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+  tmp_path = f'{cache_path}.tmp'
+  with open(tmp_path, 'wb') as f:
+    pickle.dump(
+        {
+            'format_version': 1,
+            'algorithm': algorithm,
+            'length': length,
+            'num_samples': num_samples,
+            'seed': FLAGS.test_dataset_seed,
+            'sampler_kwargs': sampler_kwargs,
+            'feedback': feedback,
+            'spec': spec,
+        },
+        f,
+        protocol=pickle.HIGHEST_PROTOCOL,
+    )
+  os.replace(tmp_path, cache_path)
+  return feedback, spec
+
+
 def _maybe_download_dataset(dataset_path):
   """Download CLRS30 dataset if needed."""
   dataset_folder = os.path.join(dataset_path, clrs.get_clrs_folder())
@@ -312,15 +449,20 @@ def make_sampler(length: int,
                                                      split=split)
     sampler = sampler.as_numpy_iterator()
   else:
-    num_samples = clrs.CLRS30[split]['num_samples'] * multiplier
-    sampler, spec = clrs.build_sampler(
-        algorithm,
-        seed=rng.randint(2**32),
-        num_samples=num_samples,
-        length=length,
-        **sampler_kwargs,
-        )
-    sampler = _iterate_sampler(sampler, batch_size)
+    num_samples = _test_num_samples(split, multiplier)
+    if split == 'test' and FLAGS.test_dataset_cache_dir:
+      feedback, spec = _load_or_create_cached_test_feedback(
+          algorithm, length, num_samples, sampler_kwargs)
+      sampler = _iterate_cached_feedback(feedback, batch_size)
+    else:
+      sampler, spec = clrs.build_sampler(
+          algorithm,
+          seed=rng.randint(2**32),
+          num_samples=num_samples,
+          length=length,
+          **sampler_kwargs,
+          )
+      sampler = _iterate_sampler(sampler, batch_size)
 
   if randomize_pos:
     sampler = clrs.process_random_pos(sampler, rng)
@@ -354,6 +496,12 @@ def _concat(dps, axis):
 
 def collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras):
   """Collect batches of output and hint preds and evaluate them."""
+  algorithm = extras.get('algorithm', 'unknown') if extras else 'unknown'
+  logging.info(
+      'Evaluation collect for %s: starting %d examples.',
+      algorithm,
+      sample_count,
+  )
   processed_samples = 0
   preds = []
   outputs = []
@@ -365,8 +513,15 @@ def collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras):
     cur_preds, _ = predict_fn(new_rng_key, feedback.features)
     preds.append(cur_preds)
     processed_samples += batch_size
+    logging.info(
+        'Evaluation collect for %s: processed %d/%d examples.',
+        algorithm,
+        min(processed_samples, sample_count),
+        sample_count,
+    )
   outputs = _concat(outputs, axis=0)
   preds = _concat(preds, axis=0)
+  logging.info('Evaluation collect for %s: computing CLRS metrics.', algorithm)
   out = clrs.evaluate(outputs, preds)
   if extras:
     out.update(extras)
@@ -383,6 +538,7 @@ def create_samplers(
     train_batch_size: int = 32,
     val_batch_size: int = 32,
     test_batch_size: int = 32,
+    create_train_samplers: bool = True,
     create_test_samplers: bool = True,
 ):
   """Create samplers for training, validation and testing.
@@ -399,6 +555,8 @@ def create_samplers(
     train_batch_size: batch size for training samplers.
     val_batch_size: batch size for validation samplers.
     test_batch_size: batch size for test samplers.
+    create_train_samplers: Whether to build train samplers. Disable for
+      eval-only runs to avoid unnecessary train dataset construction.
     create_test_samplers: Whether to build test samplers. Disable for
       train-only runs to avoid unnecessary test dataset construction.
 
@@ -472,7 +630,10 @@ def create_samplers(
           sampler_kwargs=sampler_kwargs,
           **common_sampler_args,
       )
-      train_sampler, _, _ = make_multi_sampler(**train_args)
+      if create_train_samplers:
+        train_sampler, _, _ = make_multi_sampler(**train_args)
+      else:
+        train_sampler = None
 
       algo_settings = clrs.CLRS_30_ALGS_SETTINGS.get(
           algorithm, {'num_samples_multiplier': 1})
@@ -822,6 +983,7 @@ def _run_single_seed(seed: int, run_dir: str):
       val_lengths=[np.amax(train_lengths)],
       test_lengths=test_lengths,
       train_batch_size=FLAGS.batch_size,
+      create_train_samplers=FLAGS.run_mode != 'eval',
       create_test_samplers=FLAGS.run_mode != 'train',
   )
 
@@ -853,7 +1015,7 @@ def _run_single_seed(seed: int, run_dir: str):
       dummy_trajectory=[next(t) for t in val_samplers],
       **model_params
   )
-  if FLAGS.chunked_training:
+  if FLAGS.chunked_training and FLAGS.run_mode != 'eval':
     train_model = clrs.models.BaselineModelChunked(
         spec=spec_list,
         dummy_trajectory=[next(t) for t in train_samplers],

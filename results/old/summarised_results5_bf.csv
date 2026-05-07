@@ -1,6 +1,0 @@
-,Argmax_Model_Accuracy,Argmax_True_Accuracy,Random_Model_Accuracy,Random_True_Accuracy,Beam_Model_Accuracy,Beam_True_Accuracy,Greedy_Model_Accuracy,Greedy_True_Accuracy,mean_uniqueness_model_beam,mean_valids_model_beam,mean_valids_uniques_model_beam,mean_uniqueness_true_beam,mean_valids_true_beam,mean_valids_uniques_true_beam,mean_uniqueness_model_greedy,mean_valids_model_greedy,mean_valids_uniques_model_greedy,mean_uniqueness_true_greedy,mean_valids_true_greedy,mean_valids_uniques_true_greedy
-0,1.0,1.0,0.0,0.0,1.0,1.0,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0
-0,1.0,1.0,0.0,0.0,1.0,1.0,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0
-0,1.0,1.0,0.0,0.0,1.0,1.0,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0
-0,1.0,1.0,0.0,0.0,1.0,1.0,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0
-0,1.0,1.0,0.0,0.0,1.0,1.0,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0,0.2,1.0,1.0

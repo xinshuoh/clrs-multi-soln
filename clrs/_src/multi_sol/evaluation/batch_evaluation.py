@@ -6,6 +6,7 @@ import copy
 import dataclasses
 from typing import Any, Callable, Dict, Sequence, Tuple
 
+from absl import logging
 import numpy as np
 
 from clrs._src.multi_sol.evaluation import distribution_validation
@@ -67,6 +68,8 @@ def evaluate_multisol_batch(
     include_source_nodes: bool = False,
 ) -> Dict[str, Any]:
   """Collect predictions, evaluate samplers, and persist reports."""
+  logging.info(
+      'Multi-solution evaluation: collecting %d examples.', sample_count)
   batch, out = _collect_batch(
       sampler=sampler,
       predict_fn=predict_fn,
@@ -75,6 +78,7 @@ def evaluate_multisol_batch(
       batch_extractor=batch_extractor,
   )
 
+  logging.info('Multi-solution evaluation: evaluating one-shot samplers.')
   pair_results = _evaluate_sampling_pairs(
       batch=batch,
       sampling_methods=sampling_methods,
@@ -86,6 +90,11 @@ def evaluate_multisol_batch(
       include_source_nodes=include_source_nodes,
   )
 
+  logging.info(
+      'Multi-solution evaluation: evaluating sampling distributions with '
+      '%d samples per method.',
+      n_samples,
+  )
   sampling_summary = _evaluate_sampling_distributions(
       batch=batch,
       sampling_methods=sampling_methods,
@@ -96,6 +105,8 @@ def evaluate_multisol_batch(
   result_dict.update(sampling_summary["result_dict"])
 
   if vd_flag and algorithm_source is not None:
+    logging.info(
+        'Multi-solution evaluation: evaluating algorithm-source sampler.')
     algorithm_summary = _evaluate_algorithm_source(
         batch=batch,
         algorithm_source=algorithm_source,
@@ -113,6 +124,7 @@ def evaluate_multisol_batch(
     )
 
   report_sink = save_results_fn or reporting.discard_report
+  logging.info('Multi-solution evaluation: writing sampling report %s.', filename)
   report_sink(result_dict, filename)
 
   out.update(sampling_summary["scalar_metrics"])
@@ -148,6 +160,11 @@ def _collect_batch(
     adjacency, source_nodes = batch_extractor(feedback)
     adjacency_batches.append(adjacency)
     source_batches.append(source_nodes)
+    logging.info(
+        'Multi-solution evaluation: collected %d/%d examples.',
+        min(processed_samples, sample_count),
+        sample_count,
+    )
 
   concat_tree = _concat_tree()
   outputs = concat_tree(outputs, axis=0)
@@ -173,6 +190,10 @@ def _evaluate_sampling_pairs(
 ) -> Dict[str, Dict[str, object]]:
   results = {}
   for method in sampling_methods:
+    logging.info(
+        'Multi-solution evaluation: evaluating one-shot method %s.',
+        method.name,
+    )
     results[method.name] = evaluate_sampling_pair(
         model_sample_fn=lambda data, method=method: method.model_sample_fn(
             data, batch),
@@ -290,4 +311,3 @@ def _clrs():
 def _concat_tree():
   from clrs._src.multi_sol.data import adapters
   return adapters.concat_tree
-

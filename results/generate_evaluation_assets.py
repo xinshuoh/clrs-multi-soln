@@ -6,7 +6,7 @@ one-off shell snippets.
 
 Usage:
   python results/generate_evaluation_assets.py
-  python results/generate_evaluation_assets.py --root results/final_for_diss
+  python results/generate_evaluation_assets.py --root results/eval_1may_n100
 """
 
 from __future__ import annotations
@@ -20,12 +20,30 @@ from typing import Iterable
 import numpy as np
 import pandas as pd
 
-SIZES = (5, 16, 64)
-BFS_METHODS = ("Categorical", "Prim", "Beam", "Random")
-PRIM_METHODS = ("Argmax", "Tree", "Greedy", "Random")
+SIZES = (5,6, 16,17, 64,65)
 SOURCES = ("True", "Model")
+PROCESSORS = ("triplet-gmpnn", "pgn")
 DISPLAY_NAMES = {
+    "altUpwards": "AltUpwards",
     "Prim": "Prim-like",
+}
+ALGORITHM_METHODS = {
+    "bfs_multi": ("Categorical", "Prim", "Beam", "Random"),
+    "dfs_multi": ("Argmax", "altUpwards", "Upwards", "Random"),
+    "bellman_ford_multi": ("Argmax", "Beam", "Greedy", "Random"),
+    "mst_prim_multi": ("Argmax", "Tree", "Greedy", "Random"),
+}
+ALGORITHM_DISPLAY_NAMES = {
+    "bfs_multi": "BFS-Multi",
+    "dfs_multi": "DFS-Multi",
+    "bellman_ford_multi": "Bellman-Ford-Multi",
+    "mst_prim_multi": "Prim-Multi",
+}
+ALGORITHM_OUTPUT_NAMES = {
+    "bfs_multi": "bfs",
+    "dfs_multi": "dfs",
+    "bellman_ford_multi": "bellman-ford",
+    "mst_prim_multi": "mst-prim",
 }
 
 
@@ -63,18 +81,22 @@ def score_files(root: Path, algorithm: str, size: int) -> list[Path]:
     return [Path(p) for p in sorted(glob.glob(str(pattern)))]
 
 
-def sampling_files(root: Path, algorithm: str, size: int) -> list[Path]:
-    """Return per-seed sampling report files for an algorithm and size."""
-    if algorithm == "bfs_multi":
-        pattern = (
-            root / f"bfs_multi_{size}_5seeds" / "seed_*" / f"bfs_multi_{size}*_BFS.csv"
-        )
-    elif algorithm == "mst_prim_multi":
-        pattern = (
-            root / f"mst_prim_multi_{size}_seed*" / f"mst_prim_multi_{size}_MSTPrim.csv"
-        )
-    else:
-        raise ValueError(f"Unknown algorithm: {algorithm}")
+def sampling_files(
+    root: Path,
+    algorithm: str,
+    size: int,
+    processor: str = "triplet-gmpnn",
+) -> list[Path]:
+    """Return per-seed n100 sampling report files for an algorithm and size."""
+    pattern = (
+        root
+        / algorithm
+        / processor
+        / "eval"
+        / f"test_length_{size}_n100"
+        / "seed_*"
+        / "samples.csv"
+    )
     return [Path(p) for p in sorted(glob.glob(str(pattern)))]
 
 
@@ -148,22 +170,26 @@ def sampling_summary(
     root: Path,
     algorithm: str,
     methods: Iterable[str],
+    processor: str = "triplet-gmpnn",
 ) -> pd.DataFrame:
-    """Aggregate graph-accuracy and diversity metrics from sampling reports."""
+    """Aggregate graph accuracy from n100 sampling reports.
+
+    Each seed contributes the mean of its per-graph ``*_Accuracy`` column.
+    The final mean/std are then computed across seeds.
+    """
     rows = []
     for size in SIZES:
         per_seed = []
-        for path in sampling_files(root, algorithm, size):
+        for path in sampling_files(root, algorithm, size, processor=processor):
             frame = pd.read_csv(path)
             seed_row = {}
             for method in methods:
                 for source in SOURCES:
                     prefix = f"{method}_{source}"
-                    seed_row[f"{prefix}_valid"] = frame[f"{prefix}_Valids"].mean()
-                    seed_row[f"{prefix}_unique"] = frame[f"{prefix}_Uniques"].mean()
-                    seed_row[f"{prefix}_valid_unique"] = frame[
-                        f"{prefix}_Valids_Uniques"
-                    ].mean()
+                    column = f"{prefix}_Accuracy"
+                    if column not in frame.columns:
+                        raise KeyError(f"Missing {column} in {path}")
+                    seed_row[f"{prefix}_accuracy"] = frame[column].mean()
             per_seed.append(seed_row)
         if not per_seed:
             continue
@@ -171,25 +197,28 @@ def sampling_summary(
         per_seed_frame = pd.DataFrame(per_seed)
         for method in methods:
             for source in SOURCES:
-                for metric in ("valid", "unique", "valid_unique"):
-                    series = per_seed_frame[f"{method}_{source}_{metric}"]
-                    rows.append(
-                        {
-                            "algorithm": algorithm,
-                            "size": size,
-                            "method": method,
-                            "source": source,
-                            "metric": metric,
-                            "mean": series.mean(),
-                            "std": series.std(ddof=1) if len(series) > 1 else 0.0,
-                            "num_seeds": len(series),
-                        }
-                    )
+                series = per_seed_frame[f"{method}_{source}_accuracy"]
+                rows.append(
+                    {
+                        "algorithm": algorithm,
+                        "processor": processor,
+                        "size": size,
+                        "method": method,
+                        "source": source,
+                        "metric": "accuracy",
+                        "mean": series.mean(),
+                        "std": series.std(ddof=1) if len(series) > 1 else 0.0,
+                        "num_seeds": len(series),
+                    }
+                )
     return pd.DataFrame(rows)
 
 
-def _latex_cell(mean: float, std: float) -> str:
-    return f"{mean:.2f} $\\pm$ {std:.2f}"
+def _latex_cell(mean: float, std: float, bold: bool = False) -> str:
+    mean_str = f"\\bm{{{mean*100:.2f}}}\\textbf{{\\%}}" if bold else f"{mean*100:.2f}\\%"
+    std_str = f"{std*100:.2f}\\%"
+
+    return f"${mean_str} \\pm {std_str}$"
 
 
 def write_sampling_table(
@@ -200,8 +229,9 @@ def write_sampling_table(
     label: str,
     output_path: Path,
 ) -> None:
-    """Write a paper-style LaTeX table for graph accuracy or diversity."""
+    """Write a paper-style LaTeX table for graph accuracy."""
     method_list = list(methods)
+    sizes = sorted(summary["size"].unique())
     lines = [
         "\\begin{table}[hbt!]",
         "    \\centering",
@@ -215,9 +245,12 @@ def write_sampling_table(
         + " \\\\",
         "        \\midrule",
     ]
-    for size in SIZES:
+    for size in sizes:
         for source in SOURCES:
             cells = []
+            means = []
+
+            # first pass: collect means
             for method in method_list:
                 row = summary[
                     (summary["size"] == size)
@@ -225,7 +258,25 @@ def write_sampling_table(
                     & (summary["method"] == method)
                     & (summary["metric"] == metric)
                 ].iloc[0]
-                cells.append(_latex_cell(float(row["mean"]), float(row["std"])))
+                means.append(float(row["mean"]))
+
+            max_mean = max(means)
+
+            # second pass: format with bold if needed
+            for method, mean in zip(method_list, means):
+                row = summary[
+                    (summary["size"] == size)
+                    & (summary["source"] == source)
+                    & (summary["method"] == method)
+                    & (summary["metric"] == metric)
+                ].iloc[0]
+
+                std = float(row["std"])
+
+                # use a tolerance for float comparison
+                is_best = abs(mean - max_mean) < 1e-12
+
+                cells.append(_latex_cell(mean, std, bold=is_best))
             lines.append(
                 f"        $n={size}$ & {source} & " + " & ".join(cells) + " \\\\"
             )
@@ -281,52 +332,43 @@ def plot_validation_curves(root: Path, output_dir: Path, size: int = 16) -> Path
 
 def generate_assets(root: Path, output_dir: Path) -> None:
     """Generate all reusable evaluation assets."""
+    generate_graph_accuracy_assets(root, output_dir)
+
+
+def generate_graph_accuracy_assets(
+    root: Path,
+    output_dir: Path,
+) -> None:
+    """Generate n100 graph-accuracy tables from ``*_Accuracy`` columns."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    validation = final_distribution_metrics(root)
-    validation.to_csv(output_dir / "distribution-fitting-validation.csv", index=False)
+    all_summaries = []
+    for algorithm, methods in ALGORITHM_METHODS.items():
+        for processor in PROCESSORS:
+            summary = sampling_summary(root, algorithm, methods, processor=processor)
+            if summary.empty:
+                print(f"Skipped {algorithm}: no {processor} n100 samples found")
+                continue
+            all_summaries.append(summary)
+            stem = ALGORITHM_OUTPUT_NAMES[algorithm]
+            summary.to_csv(output_dir / f"{stem}-{processor}-graph-accuracy-summary.csv", index=False)
+            write_sampling_table(
+                summary,
+                methods,
+                "accuracy",
+                (
+                    f"{ALGORITHM_DISPLAY_NAMES[algorithm]} graph accuracy using {processor} on n100 "
+                    "test graphs of size $5$, $16$, and $64$."
+                ),
+                f"tab:{stem}-{processor}-graph-accuracy",
+                output_dir / f"{stem}-{processor}-graph-accuracy.tex",
+            )
 
-    bfs = sampling_summary(root, "bfs_multi", BFS_METHODS)
-    bfs.to_csv(output_dir / "bfs-sampling-summary.csv", index=False)
-    write_sampling_table(
-        bfs,
-        BFS_METHODS,
-        "valid",
-        "BFS-Multi graph accuracy on test graphs of size $5$, $16$, and $64$.",
-        "tab:bfs-graph-accuracy",
-        output_dir / "bfs-graph-accuracy.tex",
-    )
-    write_sampling_table(
-        bfs,
-        BFS_METHODS,
-        "unique",
-        "BFS-Multi diversity, measured as the proportion of distinct predecessor arrays among 25 samples.",
-        "tab:bfs-diversity",
-        output_dir / "bfs-diversity.tex",
-    )
-
-    prim = sampling_summary(root, "mst_prim_multi", PRIM_METHODS)
-    prim.to_csv(output_dir / "prim-sampling-summary.csv", index=False)
-    write_sampling_table(
-        prim,
-        PRIM_METHODS,
-        "valid",
-        "Prim-Multi graph accuracy on test graphs of size $5$, $16$, and $64$.",
-        "tab:prim-graph-accuracy",
-        output_dir / "prim-graph-accuracy.tex",
-    )
-    write_sampling_table(
-        prim,
-        PRIM_METHODS,
-        "unique",
-        "Prim-Multi diversity, measured as the proportion of distinct predecessor arrays among 25 samples.",
-        "tab:prim-diversity",
-        output_dir / "prim-diversity.tex",
-    )
-
-    plot_path = plot_validation_curves(root, output_dir)
-    print(f"Wrote evaluation assets to {output_dir}")
-    print(f"Wrote validation curve to {plot_path}")
+    if all_summaries:
+        pd.concat(all_summaries, ignore_index=True).to_csv(
+            output_dir / f"graph-accuracy-summary.csv", index=False
+        )
+    print(f"Wrote graph accuracy assets to {output_dir}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -334,7 +376,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(__file__).resolve().parent / "final_for_diss",
+        default=Path(__file__).resolve().parent / "eval_1may_n100",
         help="Directory containing final result runs.",
     )
     parser.add_argument(
@@ -352,7 +394,7 @@ def main() -> None:
     output_dir = args.output_dir
     if output_dir is None:
         output_dir = root / "evaluation_assets"
-    generate_assets(root, output_dir.resolve())
+    generate_graph_accuracy_assets(root, output_dir.resolve())
 
 
 if __name__ == "__main__":

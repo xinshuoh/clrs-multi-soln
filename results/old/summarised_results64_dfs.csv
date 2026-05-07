@@ -1,6 +1,0 @@
-,Argmax_Model_Accuracy,Argmax_True_Accuracy,Random_Model_Accuracy,Random_True_Accuracy,Upwards_Model_Accuracy,Upwards_True_Accuracy,altUpwards_Model_Accuracy,altUpwards_True_Accuracy,mean_uniqueness_model,mean_valids_model,mean_valids_uniques_model,mean_uniqueness_true,mean_valids_true,mean_valids_uniques_true,altmean_uniqueness_model,altmean_valids_model,altmean_valids_uniques_model,altmean_uniqueness_true,altmean_valids_true,altmean_valids_uniques_true
-0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0,0.0,1.0,0.0125,0.0125,1.0,0.037500000000000006,0.037500000000000006,1.0,0.05,0.05
-0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.00625,0.00625,1.0,0.00625,0.00625,1.0,0.025,0.025,1.0,0.05,0.05
-0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.00625,0.00625,1.0,0.025,0.025,1.0,0.03125,0.03125,1.0,0.043750000000000004,0.043750000000000004
-0,0.0,0.0,0.0,0.0,0.03125,0.0,0.0,0.0,1.0,0.00625,0.00625,1.0,0.018750000000000003,0.018750000000000003,1.0,0.025,0.025,1.0,0.037500000000000006,0.037500000000000006
-0,0.0,0.0,0.0,0.0,0.03125,0.0,0.0,0.0,1.0,0.0125,0.0125,1.0,0.018750000000000003,0.018750000000000003,1.0,0.043750000000000004,0.043750000000000004,1.0,0.05625,0.05625

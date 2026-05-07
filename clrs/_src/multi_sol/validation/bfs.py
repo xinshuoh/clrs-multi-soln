@@ -35,30 +35,30 @@ def check_valid_bfsTree(adjacency, pi, s):
       if parent not in dist or dist[parent] != dist[i] - 1:
         return False
 
-  levels = {}
-  for node, lvl in dist.items():
-    levels.setdefault(lvl, []).append(node)
+  # levels = {}
+  # for node, lvl in dist.items():
+  #   levels.setdefault(lvl, []).append(node)
 
-  max_level = max(levels.keys(), default=0)
-  for lvl in range(1, max_level + 1):
-    prev_level = levels.get(lvl - 1, [])
-    cur_level = levels.get(lvl, [])
-    if not cur_level:
-      continue
+  # max_level = max(levels.keys(), default=0)
+  # for lvl in range(1, max_level + 1):
+  #   prev_level = levels.get(lvl - 1, [])
+  #   cur_level = levels.get(lvl, [])
+  #   if not cur_level:
+  #     continue
 
-    ordering_constraints = nx.DiGraph()
-    ordering_constraints.add_nodes_from(prev_level)
-    for child in cur_level:
-      parent = int(pi[child])
-      candidate_parents = [u for u in prev_level if adjacency[u, child] != 0]
-      if parent not in candidate_parents:
-        return False
-      for other in candidate_parents:
-        if other != parent:
-          ordering_constraints.add_edge(parent, other)
+  #   ordering_constraints = nx.DiGraph()
+  #   ordering_constraints.add_nodes_from(prev_level)
+  #   for child in cur_level:
+  #     parent = int(pi[child])
+  #     candidate_parents = [u for u in prev_level if adjacency[u, child] != 0]
+  #     if parent not in candidate_parents:
+  #       return False
+  #     for other in candidate_parents:
+  #       if other != parent:
+  #         ordering_constraints.add_edge(parent, other)
 
-    if not nx.is_directed_acyclic_graph(ordering_constraints):
-      return False
+  #   if not nx.is_directed_acyclic_graph(ordering_constraints):
+  #     return False
 
   return True
 

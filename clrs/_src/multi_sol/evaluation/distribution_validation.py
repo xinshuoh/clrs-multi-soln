@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Callable, Dict, Iterable, Mapping, Tuple
 
+from absl import logging
 import numpy as np
 
 
@@ -12,9 +13,27 @@ def sample_n(
     sample_fn: Callable[[object], object],
     sample_input,
     n_samples: int,
+    label: str | None = None,
 ) -> np.ndarray:
   """Draw `n_samples` batches of hard parent trees from a sampler."""
-  samples = [np.asarray(sample_fn(sample_input)) for _ in range(n_samples)]
+  samples = []
+  log_every = max(1, n_samples // 5)
+  if label:
+    logging.info(
+        'Distribution validation: sampling %s, 0/%d draws.',
+        label,
+        n_samples,
+    )
+  for sample_ix in range(n_samples):
+    samples.append(np.asarray(sample_fn(sample_input)))
+    if label and (
+        sample_ix + 1 == n_samples or (sample_ix + 1) % log_every == 0):
+      logging.info(
+          'Distribution validation: sampling %s, %d/%d draws.',
+          label,
+          sample_ix + 1,
+          n_samples,
+      )
   return np.asarray(samples)
 
 
@@ -41,6 +60,12 @@ def summarize_samples(
   curve_rows = []
 
   for graph_ix in range(len(adjacency)):
+    if graph_ix == 0:
+      logging.info(
+          'Distribution validation: summarizing %d graphs and %d samples.',
+          len(adjacency),
+          n_samples,
+      )
     graph_samples = np.asarray(samples[:, graph_ix])
     unique_trees = _unique_parent_trees(graph_samples)
     unique_valids = [
@@ -101,7 +126,9 @@ def evaluate_sampling_methods(
 
   for method_name, sample_fn in methods.items():
     for value_name, sample_input in (("Model", model_input), ("True", true_input)):
-      samples = sample_n(sample_fn, sample_input, n_samples)
+      label = f"{method_name}/{value_name}"
+      logging.info('Distribution validation: evaluating %s.', label)
+      samples = sample_n(sample_fn, sample_input, n_samples, label=label)
       summary = summarize_samples(
           adjacency=adjacency,
           source_nodes=source_nodes,
@@ -127,6 +154,7 @@ def evaluate_sampling_methods(
         row["Method"] = method_name
         row["Source"] = value_name
         curve_rows.append(row)
+      logging.info('Distribution validation: finished %s.', label)
 
   return {
       "result_dict": result_dict,
@@ -158,7 +186,9 @@ def evaluate_mixed_sampling_methods(
         ("Model", model_fn, model_input),
         ("True", true_methods[method_name], true_input),
     ):
-      samples = sample_n(sample_fn, sample_input, n_samples)
+      label = f"{method_name}/{value_name}"
+      logging.info('Distribution validation: evaluating %s.', label)
+      samples = sample_n(sample_fn, sample_input, n_samples, label=label)
       summary = summarize_samples(
           adjacency=adjacency,
           source_nodes=source_nodes,
@@ -184,6 +214,7 @@ def evaluate_mixed_sampling_methods(
         row["Method"] = method_name
         row["Source"] = value_name
         curve_rows.append(row)
+      logging.info('Distribution validation: finished %s.', label)
 
   return {
       "result_dict": result_dict,
@@ -213,7 +244,9 @@ def evaluate_sampling_sources(
   n_samples = max(1, int(n_samples))
 
   for (method_name, source_name), (sample_fn, sample_input) in sources.items():
-    samples = sample_n(sample_fn, sample_input, n_samples)
+    label = f"{method_name}/{source_name}"
+    logging.info('Distribution validation: evaluating %s.', label)
+    samples = sample_n(sample_fn, sample_input, n_samples, label=label)
     summary = summarize_samples(
         adjacency=adjacency,
         source_nodes=source_nodes,
@@ -239,6 +272,7 @@ def evaluate_sampling_sources(
       row["Method"] = method_name
       row["Source"] = source_name
       curve_rows.append(row)
+    logging.info('Distribution validation: finished %s.', label)
 
   return {
       "result_dict": result_dict,

@@ -358,6 +358,10 @@ class RunMultisolDispatchTest(absltest.TestCase):
     self.assertEqual(defaults["NSE"], 25)
     self.assertEqual(defaults["distribution_validation_graphs"], 0)
     self.assertIsNone(defaults["test_length"])
+    self.assertEqual(defaults["test_dataset_cache_dir"], "")
+    self.assertEqual(defaults["test_dataset_seed"], 0)
+    self.assertEqual(defaults["test_num_samples"], 0)
+    self.assertIs(defaults["refresh_test_dataset_cache"], False)
 
   def test_run_source_resolves_checkpoint_default_under_run_dir(self):
     run_path = pathlib.Path(__file__).resolve().with_name("run.py")
@@ -374,7 +378,20 @@ class RunMultisolDispatchTest(absltest.TestCase):
     self.assertIn("FLAGS.load_models_from_dir", source)
     self.assertIn("f'seed_{seed}'", source)
     self.assertIn("FLAGS.run_mode == 'train'", source)
+    self.assertIn("create_train_samplers=FLAGS.run_mode != 'eval'", source)
+    self.assertIn("FLAGS.chunked_training and FLAGS.run_mode != 'eval'", source)
     self.assertIn("return []", source)
+
+  def test_run_source_supports_cached_positive_length_test_datasets(self):
+    run_path = pathlib.Path(__file__).resolve().with_name("run.py")
+    source = run_path.read_text(encoding="utf-8")
+    self.assertIn("def _cached_test_dataset_path", source)
+    self.assertIn("def _load_or_create_cached_test_feedback", source)
+    self.assertIn("FLAGS.test_dataset_cache_dir", source)
+    self.assertIn("FLAGS.test_dataset_seed", source)
+    self.assertIn("FLAGS.test_num_samples", source)
+    self.assertIn("FLAGS.refresh_test_dataset_cache", source)
+    self.assertIn("_iterate_cached_feedback(feedback, batch_size)", source)
 
 
 if __name__ == "__main__":
