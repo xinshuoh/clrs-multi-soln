@@ -3,7 +3,7 @@
 import chex
 import numpy as np
 
-from clrs._src.multi_sol.validation import check_graphs
+from clrs._src.multi_sol.algorithms.common import validator_utils
 
 
 def prim_mst_weight(adjacency, source):
@@ -52,14 +52,14 @@ def is_source_rooted_tree(parent_tree, source, node_mask=None):
 
 def check_valid_mstPrimTree(adjacency, pi, s):
   """Validate MST-Prim parent pointers by MST weight equivalence."""
-  if not check_graphs.is_square_adjacency(adjacency):
+  if not validator_utils.is_square_adjacency(adjacency):
     return False
 
   n = adjacency.shape[0]
   if s < 0 or s >= n:
     return False
 
-  pi = check_graphs.coerce_parent_array(pi, n)
+  pi = validator_utils.coerce_parent_array(pi, n)
   if pi is None:
     return False
   if pi[s] != s:
@@ -85,7 +85,7 @@ def check_valid_mstPrimTree(adjacency, pi, s):
 
   if not is_source_rooted_tree(pi, s, reachable):
     return False
-  return np.isclose(sampled_weight, true_weight)
+  return bool(np.isclose(sampled_weight, true_weight))
 
 
 def check_valid_mst_prim_tree(adjacency, parent_tree, source):

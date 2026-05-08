@@ -1,10 +1,11 @@
 """MST-Prim extraction strategies (plugin-oriented)."""
+#TODO: Deprecate this in favour of clrs/_src/multi_sol/algorithms/mst_prim/extractors.py
 
 from __future__ import annotations
 
 import numpy as np
 
-from clrs._src.multi_sol.sampling import base
+from clrs._src.multi_sol.algorithms.common import extractor_utils
 
 
 def sample_mst_prim_greedy(
@@ -16,7 +17,7 @@ def sample_mst_prim_greedy(
 ):
   """Sample MST-Prim parents with a Bellman-Ford-style greedy baseline."""
   trees = []
-  for adjacency, source, prob_matrix in base.iter_adjacency_source_prob_matrices(
+  for adjacency, source, prob_matrix in extractor_utils.iter_adjacency_source_prob_matrices(
       adjacencies, source_nodes, outs_or_preds):
     trees.append(mst_prim_greedy_sampler(
         adjacency,
@@ -37,7 +38,7 @@ def mst_prim_greedy_sampler(
 ):
   """Choose low-weight sampled real neighbours independently for each node."""
   adjacency = np.asarray(adjacency)
-  prob_matrix = base.normalize_rows(np.asarray(prob_matrix))
+  prob_matrix = extractor_utils.normalize_rows(np.asarray(prob_matrix))
   num_nodes = prob_matrix.shape[0]
   pi = np.arange(num_nodes, dtype=int)
   pi[source] = source
@@ -48,7 +49,7 @@ def mst_prim_greedy_sampler(
 
     chosen_parent = None
     for _ in range(max_resamples):
-      candidates = base.sample_indices(prob_matrix[v], num_candidates)
+      candidates = extractor_utils.sample_indices(prob_matrix[v], num_candidates)
       plausible = [
           u for u in candidates
           if u != v and adjacency[u, v] != 0
@@ -59,7 +60,7 @@ def mst_prim_greedy_sampler(
         break
 
     if chosen_parent is None:
-      chosen_parent = base.highest_probability_real_neighbour(
+      chosen_parent = extractor_utils.highest_probability_real_neighbour(
           adjacency, prob_matrix, v)
     pi[v] = chosen_parent
 
@@ -69,7 +70,7 @@ def mst_prim_greedy_sampler(
 def sample_mst_prim_tree(adjacencies, source_nodes, outs_or_preds):
   """Sample source-rooted trees from parent probabilities over crossing edges."""
   trees = []
-  for adjacency, source, prob_matrix in base.iter_adjacency_source_prob_matrices(
+  for adjacency, source, prob_matrix in extractor_utils.iter_adjacency_source_prob_matrices(
       adjacencies, source_nodes, outs_or_preds):
     trees.append(mst_prim_tree_sampler(adjacency, source, prob_matrix))
   return trees
@@ -90,7 +91,7 @@ def mst_prim_tree_sampler(adjacency, source, prob_matrix):
     if not crossing_edges:
       break
 
-    edge_ix: int = base.sample_index(edge_probs, fallback="uniform")
+    edge_ix: int = extractor_utils.sample_index(edge_probs, fallback="uniform")
     parent, child = crossing_edges[edge_ix]
     pi[child] = parent
     in_tree[child] = True

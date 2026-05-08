@@ -1,1 +1,1 @@
-"""Algorithm plugins for multi-solution orchestration."""
+"""Multi-solution algorithm packages."""

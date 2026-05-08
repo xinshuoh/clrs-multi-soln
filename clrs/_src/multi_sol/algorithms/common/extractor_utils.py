@@ -1,13 +1,10 @@
-"""Shared sampling helpers."""
+"""Shared utilities for extraction."""
 
 from typing import Literal
 from typing import List
 from typing import overload
 
 import numpy as np
-
-from clrs._src.multi_sol.data.distribution import extract_probability_matrices
-
 
 def normalize_rows(prob_matrix: np.ndarray) -> np.ndarray:
   """Row-normalize probability matrix while preserving zero rows."""
@@ -19,7 +16,15 @@ def normalize_rows(prob_matrix: np.ndarray) -> np.ndarray:
 
 
 def extract_prob_matrices(outs_or_preds) -> List[np.ndarray]:
-  return extract_probability_matrices(outs_or_preds)
+  """Return list of node-parent probability matrices from CLRS outputs/preds."""
+  matrices = []
+  for value in outs_or_preds:
+    if isinstance(value, dict):
+      dist_list = value["pi"].data
+    else:
+      dist_list = value.data
+    matrices.extend(dist_list)
+  return matrices
 
 
 def as_instance_list(values, expected_len):

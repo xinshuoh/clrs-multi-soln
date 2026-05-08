@@ -2,14 +2,12 @@
 
 from typing import Dict
 
-from clrs._src.multi_sol.algorithms import graphs
+from clrs._src.multi_sol.algorithms.bfs import generator
 from clrs._src.multi_sol.algorithms.bfs import definition
 from clrs._src.multi_sol.evaluation import batch_evaluation
 
 
 distribution_validation = batch_evaluation.distribution_validation
-_sample_randomized_bfs_algorithm = definition._sample_randomized_bfs_algorithm
-_randomized_bfs_tree = graphs.bfs_multi
 
 
 def evaluate_bfs_multisol_batch(

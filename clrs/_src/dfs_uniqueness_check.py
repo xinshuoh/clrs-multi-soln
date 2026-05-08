@@ -1,6 +1,6 @@
 import numpy as np
 from clrs._src.multi_sol.sampling import dfs as dfs_sampling
-from clrs._src.multi_sol.validation import dfs as dfs_validation
+from clrs._src.multi_sol.algorithms.dfs import validator as dfs_validation
 
 
 def check_uniqueness_dfs(As, probMatrices, n_samples = 5, method = "upwards"):

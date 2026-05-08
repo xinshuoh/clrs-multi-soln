@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from clrs._src.multi_sol.sampling import base
+from clrs._src.multi_sol.algorithms.common import extractor_utils
 
 
 def sample_beamsearch(adjacencies, source_nodes, outs_or_preds):
   pi_trees = []
-  for adjacency, source, prob_matrix in base.iter_adjacency_source_prob_matrices(
+  for adjacency, source, prob_matrix in extractor_utils.iter_adjacency_source_prob_matrices(
       adjacencies, source_nodes, outs_or_preds):
     pi_trees.append(BF_beamsearch(adjacency, source, prob_matrix))
   return pi_trees
@@ -36,7 +36,7 @@ def BF_beamsearch(adjacency, source, prob_matrix, beamwidth=3):
         highest_node = candidate_path[-1]
         parent_probs = prob_matrix[highest_node]
         for _ in range(beamwidth):
-          candidate_parent = base.sample_index(parent_probs, fallback="uniform")
+          candidate_parent = extractor_utils.sample_index(parent_probs, fallback="uniform")
           new_path = np.append(candidate_path, candidate_parent)
           longer_paths.append(new_path)
 
@@ -64,7 +64,7 @@ def BF_beamsearch(adjacency, source, prob_matrix, beamwidth=3):
 
 def sample_greedysearch(adjacencies, source_nodes, outs_or_preds):
   pi_trees = []
-  for adjacency, source, prob_matrix in base.iter_adjacency_source_prob_matrices(
+  for adjacency, source, prob_matrix in extractor_utils.iter_adjacency_source_prob_matrices(
       adjacencies, source_nodes, outs_or_preds):
     pi_trees.append(BF_greedysearch(adjacency, source, prob_matrix))
   return pi_trees
@@ -79,11 +79,11 @@ def BF_greedysearch(adjacency, source, prob_matrix, beamwidth=3):
     if node == source:
       continue
 
-    best_parent = base.highest_probability_real_neighbour(
+    best_parent = extractor_utils.highest_probability_real_neighbour(
         adjacency, prob_matrix, node)
     for _ in range(10):
       candidates = [
-          base.sample_index(prob_matrix[node], fallback="uniform")
+          extractor_utils.sample_index(prob_matrix[node], fallback="uniform")
           for _ in range(beamwidth)
       ]
       candidate_costs = np.asarray(

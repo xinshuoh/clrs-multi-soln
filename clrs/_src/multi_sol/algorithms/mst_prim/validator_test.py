@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from clrs._src.multi_sol.validation import mst_prim
+from clrs._src.multi_sol.algorithms.mst_prim import validator
 
 
 class MstPrimValidationTest(unittest.TestCase):
@@ -16,7 +16,7 @@ class MstPrimValidationTest(unittest.TestCase):
         [2, 1, 0],
     ])
     self.assertTrue(
-        mst_prim.check_valid_mst_prim_tree(adjacency, [0, 0, 1], 0))
+        validator.check_valid_mst_prim_tree(adjacency, [0, 0, 1], 0))
 
   def test_accepts_alternative_minimum_spanning_tree(self):
     adjacency = np.array([
@@ -25,7 +25,7 @@ class MstPrimValidationTest(unittest.TestCase):
         [1, 1, 0],
     ])
     self.assertTrue(
-        mst_prim.check_valid_mst_prim_tree(adjacency, [0, 2, 0], 0))
+        validator.check_valid_mst_prim_tree(adjacency, [0, 2, 0], 0))
 
   def test_rejects_non_minimum_spanning_tree(self):
     adjacency = np.array([
@@ -34,7 +34,7 @@ class MstPrimValidationTest(unittest.TestCase):
         [2, 1, 0],
     ])
     self.assertFalse(
-        mst_prim.check_valid_mst_prim_tree(adjacency, [0, 0, 0], 0))
+        validator.check_valid_mst_prim_tree(adjacency, [0, 0, 0], 0))
 
   def test_rejects_parent_cycle(self):
     adjacency = np.array([
@@ -43,7 +43,7 @@ class MstPrimValidationTest(unittest.TestCase):
         [0, 1, 0],
     ])
     self.assertFalse(
-        mst_prim.check_valid_mst_prim_tree(adjacency, [0, 2, 1], 0))
+        validator.check_valid_mst_prim_tree(adjacency, [0, 2, 1], 0))
 
   def test_rejects_missing_parent_edge(self):
     adjacency = np.array([
@@ -52,7 +52,7 @@ class MstPrimValidationTest(unittest.TestCase):
         [0, 1, 0],
     ])
     self.assertFalse(
-        mst_prim.check_valid_mst_prim_tree(adjacency, [0, 0, 0], 0))
+        validator.check_valid_mst_prim_tree(adjacency, [0, 0, 0], 0))
 
   def test_accepts_disconnected_graph_with_self_parent_unreachable(self):
     adjacency = np.array([
@@ -61,7 +61,7 @@ class MstPrimValidationTest(unittest.TestCase):
         [0, 0, 0],
     ])
     self.assertTrue(
-        mst_prim.check_valid_mst_prim_tree(adjacency, [0, 0, 2], 0))
+        validator.check_valid_mst_prim_tree(adjacency, [0, 0, 2], 0))
 
   def test_rejects_non_self_parent_unreachable_node(self):
     adjacency = np.array([
@@ -70,7 +70,7 @@ class MstPrimValidationTest(unittest.TestCase):
         [0, 0, 0],
     ])
     self.assertFalse(
-        mst_prim.check_valid_mst_prim_tree(adjacency, [0, 0, 1], 0))
+        validator.check_valid_mst_prim_tree(adjacency, [0, 0, 1], 0))
 
 
 if __name__ == "__main__":

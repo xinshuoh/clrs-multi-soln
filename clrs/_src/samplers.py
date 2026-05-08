@@ -444,6 +444,43 @@ class BfsSampler(Sampler):
     return [graph, source_node]
 
 
+class DfsMultiSampler(Sampler):
+  """DFS sampler that propagates a per-instance sub-seed."""
+
+  def _sample_data(
+      self,
+      length: int,
+      p: Tuple[float, ...] = (0.5,),
+  ):
+    graph = self._random_er_graph(
+        nb_nodes=length,
+        p=self._rng.choice(p),
+        directed=True,
+        acyclic=False,
+        weighted=False)
+    sub_seed = int(self._rng.randint(0, 2**31))
+    return [graph, sub_seed]
+
+
+class BfsMultiSampler(Sampler):
+  """BFS sampler that propagates source node and per-instance sub-seed."""
+
+  def _sample_data(
+      self,
+      length: int,
+      p: Tuple[float, ...] = (0.5,),
+  ):
+    graph = self._random_er_graph(
+        nb_nodes=length,
+        p=self._rng.choice(p),
+        directed=False,
+        acyclic=False,
+        weighted=False)
+    source_node = int(self._rng.choice(length))
+    sub_seed = int(self._rng.randint(0, 2**31))
+    return [graph, source_node, sub_seed]
+
+
 class TopoSampler(Sampler):
   """Topological Sorting sampler."""
 
@@ -514,6 +551,33 @@ class BellmanFordSampler(Sampler):
     source_node = self._rng.choice(length)
     #breakpoint()
     return [graph, source_node]
+
+
+class BellmanFordMultiSampler(Sampler):
+  """Bellman-Ford sampler with a per-instance sub-seed."""
+
+  def _sample_data(
+      self,
+      length: int,
+      p: Tuple[float, ...] = (0.5,),
+      low: int = 1,
+      high: int = 3,
+  ):
+    graph = self._few_weights_random_er_graph(
+        nb_nodes=length,
+        p=self._rng.choice(p),
+        directed=False,
+        acyclic=False,
+        weighted=True,
+        low=low,
+        high=high)
+    source_node = int(self._rng.choice(length))
+    sub_seed = int(self._rng.randint(0, 2**31))
+    return [graph, source_node, sub_seed]
+
+
+MSTPrimSampler = BellmanFordSampler
+MSTPrimMultiSampler = BellmanFordMultiSampler
 
 
 class DAGPathSampler(Sampler):
@@ -677,14 +741,18 @@ SAMPLERS = {
     'activity_selector': ActivitySampler,
     'task_scheduling': TaskSampler,
     'dfs': DfsSampler,
+    'dfs_multi': DfsMultiSampler,
     'topological_sort': TopoSampler,
     'strongly_connected_components': SccSampler,
     'articulation_points': ArticulationSampler,
     'bridges': ArticulationSampler,
     'bfs': BfsSampler,
+    'bfs_multi': BfsMultiSampler,
     'mst_kruskal': MSTSampler,
     'mst_prim': BellmanFordSampler,
+    'mst_prim_multi': MSTPrimMultiSampler,
     'bellman_ford': BellmanFordSampler,
+    'bellman_ford_multi': BellmanFordMultiSampler,
     'dag_shortest_paths': DAGPathSampler,
     'dijkstra': BellmanFordSampler,
     'floyd_warshall': FloydWarshallSampler,

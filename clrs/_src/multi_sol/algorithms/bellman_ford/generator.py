@@ -9,7 +9,7 @@ import numpy as np
 
 from clrs._src import probing
 from clrs._src import specs
-from clrs._src.multi_sol.algorithms import common
+from clrs._src.multi_sol.algorithms.common import generator_utils
 
 _Array = np.ndarray
 _Out = Tuple[_Array, probing.ProbesDict]
@@ -19,17 +19,24 @@ def bellman_ford_multi(
     A: _Array, s: int, seed: int, deterministic: bool = False) -> _Out:
   """Multiple-solution Bellman-Ford target generation."""
   chex.assert_rank(A, 2)
-  return common.generate_parent_distribution_target(
+  return generator_utils.generate_parent_distribution_target(
       algorithm_name="bellman_ford_multi",
       num_nodes=A.shape[0],
       seed=seed,
       deterministic=deterministic,
       run_single=lambda rng, algorithm_spec, deterministic: (
-          _bellman_ford_execution(A, s, rng, algorithm_spec)),
+          _bellman_ford_execution(A, s, rng, algorithm_spec, deterministic)),
   )
 
 
-def _bellman_ford_execution(A, s, rng, algorithm_spec):
+def sample_solution(A: _Array, s: int, rng, deterministic: bool = False) -> _Array:
+  """Sample one Bellman-Ford predecessor tree using generator-owned logic."""
+  algorithm_spec = generator_utils.resolve_multisol_spec("bellman_ford_multi")
+  parent_tree, _ = _bellman_ford_execution(A, s, rng, algorithm_spec, deterministic)
+  return parent_tree
+
+
+def _bellman_ford_execution(A, s, rng, algorithm_spec, deterministic):
   A_pos = np.arange(A.shape[0])
   probes = probing.initialize(algorithm_spec)
   probing.push(
@@ -48,11 +55,15 @@ def _bellman_ford_execution(A, s, rng, algorithm_spec):
   d[s] = 0
   msk[s] = 1
 
-  shuffled1 = np.arange(1, A.shape[0])
-  rng.shuffle(shuffled1)
-  shuffled1 = np.concatenate(([0], shuffled1))
-  shuffled2 = np.arange(A.shape[0])
-  rng.shuffle(shuffled2)
+  if deterministic:
+    shuffled1 = np.concatenate(([0], np.arange(1, A.shape[0])))
+    shuffled2 = np.arange(A.shape[0])
+  else:
+    shuffled1 = np.arange(1, A.shape[0])
+    rng.shuffle(shuffled1)
+    shuffled1 = np.concatenate(([0], shuffled1))
+    shuffled2 = np.arange(A.shape[0])
+    rng.shuffle(shuffled2)
 
   while True:
     prev_d = np.copy(d)

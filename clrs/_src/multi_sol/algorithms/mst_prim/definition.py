@@ -1,14 +1,10 @@
 """Definition for the MST-Prim multi-solution algorithm."""
 
 from clrs._src.specs import Location, Stage, Type
-from clrs._src.multi_sol.algorithms import graphs
-from clrs._src.multi_sol.algorithms.mst_prim import generator
+from clrs._src.multi_sol.algorithms.mst_prim import extractors, generator, validator
 from clrs._src.multi_sol.core import definitions
 from clrs._src.multi_sol.data import adapters
 from clrs._src.multi_sol.evaluation import definition_evaluation
-from clrs._src.multi_sol.sampling import dfs as dfs_sampling
-from clrs._src.multi_sol.sampling import mst_prim as mst_sampling
-from clrs._src.multi_sol.validation import mst_prim as mst_validation
 from clrs._src.multi_sol import samplers
 
 
@@ -18,7 +14,7 @@ TRAINING_DISTRIBUTION = definitions.TrainingDistribution(
 )
 
 RANDOMIZED_ALGORITHM = definitions.RandomizedAlgorithm(
-    sample_solution=graphs.mst_prim_multi,
+    sample_solution=generator.sample_solution,
     uses_source_node=True,
 )
 
@@ -43,27 +39,24 @@ def _sample_randomized_prim_algorithm(adjacency, source_nodes, rng):
 
 SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
     batch_extractor=adapters.extract_mst_prim_graph_and_source,
-    validation_method=mst_validation.check_valid_mst_prim_tree,
+    validation_method=validator.check_valid_mst_prim_tree,
     extraction_methods=(
         definitions.ExtractionMethod(
             "Argmax",
-            lambda data, _batch: dfs_sampling.sample_argmax_listofdict(data),
-            lambda data, _batch: dfs_sampling.sample_argmax_listofdatapoint(
-                data),
+            extractors.extract_argmax,
+            extractors.extract_argmax_true,
         ),
         definitions.ExtractionMethod.same_sampler(
             "Random",
-            lambda data, _batch: dfs_sampling.sample_random_list(data),
+            extractors.extract_random,
         ),
         definitions.ExtractionMethod.same_sampler(
             "Tree",
-            lambda data, batch: mst_sampling.sample_mst_prim_tree(
-                batch.adjacency, batch.source_nodes, data),
+            extractors.extract_tree,
         ),
         definitions.ExtractionMethod.same_sampler(
             "Greedy",
-            lambda data, batch: mst_sampling.sample_mst_prim_greedy(
-                batch.adjacency, batch.source_nodes, data),
+            extractors.extract_greedy,
         ),
     ),
     generator_sampling_source=definitions.GeneratorSamplingSource(
@@ -94,7 +87,10 @@ DEFINITION = definitions.MultiSolAlgorithm(
     spec=SPEC,
     sampler_class=samplers.MSTPrimMultiSampler,
     algorithm=generator.mst_prim_multi,
+    generator=generator.mst_prim_multi,
     evaluator=evaluate_mst_prim_multisol_batch,
+    extractors=extractors.EXTRACTORS,
+    validator=validator.check_valid_mst_prim_tree,
     training_distribution=TRAINING_DISTRIBUTION,
     randomized_algorithm=RANDOMIZED_ALGORITHM,
     solution_space=SOLUTION_SPACE,

@@ -1,9 +1,10 @@
+
 from clrs._src.multi_sol.sampling.bellman_ford import BF_beamsearch, BF_greedysearch
 from clrs._src.multi_sol.sampling.dfs import get_parent_tree_upwards, single_sample_upwards
-from clrs._src.multi_sol.validation.bellman_ford import check_valid_BFpaths
-from clrs._src.multi_sol.validation.dfs import check_valid_dfsTree
+from clrs._src.multi_sol.algorithms.bellman_ford.validator import check_valid_BFpaths
+from clrs._src.multi_sol.algorithms.dfs.validator import check_valid_dfsTree
 from clrs._src.algorithms.dfs_verification_tester import dfsverify
-from clrs._src.multi_sol.data.distribution import extract_probability_matrices
+from clrs._src.multi_sol.algorithms.common import extractor_utils
 from sciplotlib import style as spstyle
 from clrs._src.algorithms.graphs import bellman_ford, dfs
 
@@ -64,7 +65,7 @@ def adj_matrix_to_parent_tree(A):
 # ----------------------------------------------------------------------------------------------------------------------
 def validate_distributions(As, Ss, outsOrPreds, flag, numSolsExtracting = 100, edge_reuse_BF= False, edge_reuse_DFS = False):
     #breakpoint()
-    probMatrix_list = extract_probability_matrices(outsOrPreds)
+    probMatrix_list = extractor_utils.extract_prob_matrices(outsOrPreds)
     dataframes = []
     pMs = []
     for ix in range(len(probMatrix_list)):

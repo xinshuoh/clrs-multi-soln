@@ -1,4 +1,4 @@
-"""Shared graph validation helpers."""
+"""Validator helpers for multi-solution extraction."""
 
 from __future__ import annotations
 

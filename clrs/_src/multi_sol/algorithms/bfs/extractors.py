@@ -1,24 +1,46 @@
-"""BFS extraction strategies (plugin-oriented)."""
-#TODO: Deprecate this in favour of clrs/_src/multi_sol/algorithms/bfs/extractors.py
+"""BFS-specific stochastic extraction methods."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from clrs._src.multi_sol.algorithms.common import extractor_utils 
+from clrs._src.multi_sol.algorithms.common import extractor_utils
 
 
-def sample_bfs_prim(outs_or_preds, source_nodes):
-  """Sample BFS trees using greedy processed-set attachment."""
+def extract_categorical(outs_or_preds, _batch):
+  """Sample each node parent independently using per-row categorical draw."""
   prob_matrix_list = extractor_utils.extract_prob_matrices(outs_or_preds)
-  source_nodes = extractor_utils.as_index_list(source_nodes, len(prob_matrix_list))
   trees = []
-  for i, prob_matrix in enumerate(prob_matrix_list):
-    trees.append(prim_like_sampler(prob_matrix, int(source_nodes[i])))
+  for prob_matrix in prob_matrix_list:
+    num_nodes = prob_matrix.shape[0]
+    pi = np.zeros(num_nodes, dtype=int)
+    normalized = extractor_utils.normalize_rows(prob_matrix)
+    for i in range(num_nodes):
+      parent = extractor_utils.sample_index(normalized[i])
+      if parent is not None:
+        pi[i] = parent
+    trees.append(pi)
   return trees
 
 
-def prim_like_sampler(prob_matrix, source):
+def extract_random(outs_or_preds, _batch):
+  trees = []
+  for prob_matrix in extractor_utils.extract_prob_matrices(outs_or_preds):
+    pi = [np.random.randint(len(row)) for row in prob_matrix]
+    trees.append(pi)
+  return trees
+
+
+def extract_prim(outs_or_preds, batch):
+  """Sample BFS trees using greedy processed-set attachment."""
+  prob_matrix_list = extractor_utils.extract_prob_matrices(outs_or_preds)
+  source_nodes = extractor_utils.as_index_list(batch.source_nodes, len(prob_matrix_list))
+  trees = []
+  for i, prob_matrix in enumerate(prob_matrix_list):
+    trees.append(_prim_like_sampler(prob_matrix, int(source_nodes[i])))
+  return trees
+
+def _prim_like_sampler(prob_matrix, source):
   num_nodes = prob_matrix.shape[0]
   pi = np.full(num_nodes, -1, dtype=int)
   pi[source] = source
@@ -52,33 +74,16 @@ def prim_like_sampler(prob_matrix, source):
   return pi
 
 
-def sample_bfs_categorical(outs_or_preds):
-  """Sample each node parent independently using per-row categorical draw."""
-  prob_matrix_list = extractor_utils.extract_prob_matrices(outs_or_preds)
-  trees = []
-  for prob_matrix in prob_matrix_list:
-    num_nodes = prob_matrix.shape[0]
-    pi = np.zeros(num_nodes, dtype=int)
-    normalized = extractor_utils.normalize_rows(prob_matrix)
-    for i in range(num_nodes):
-      parent = extractor_utils.sample_index(normalized[i])
-      if parent is not None:
-        pi[i] = parent
-    trees.append(pi)
-  return trees
-
-
-def sample_bfs_beam(outs_or_preds, source_nodes, beam_width=3):
+def extract_beam(outs_or_preds, batch, beam_width: int = 3):
   """Sample BFS trees using heuristic beam search over processed-set states."""
   prob_matrix_list = extractor_utils.extract_prob_matrices(outs_or_preds)
-  source_nodes = extractor_utils.as_index_list(source_nodes, len(prob_matrix_list))
+  source_nodes = extractor_utils.as_index_list(batch.source_nodes, len(prob_matrix_list))
   trees = []
   for i, prob_matrix in enumerate(prob_matrix_list):
-    trees.append(bfs_beam_sampler(prob_matrix, int(source_nodes[i]), beam_width))
+    trees.append(_bfs_beam_sampler(prob_matrix, int(source_nodes[i]), beam_width))
   return trees
 
-
-def bfs_beam_sampler(prob_matrix, source, beam_width):
+def _bfs_beam_sampler(prob_matrix, source, beam_width):
   num_nodes = prob_matrix.shape[0]
   initial_pi = np.full(num_nodes, -1, dtype=int)
   initial_pi[source] = source
@@ -125,3 +130,11 @@ def bfs_beam_sampler(prob_matrix, source, beam_width):
     beam = candidates[:beam_width]
 
   return beam[0]["pi"]
+
+EXTRACTORS = {
+    "Categorical": extract_categorical,
+    "Random": extract_random,
+    "Prim": extract_prim,
+    "Beam": extract_beam,
+}
+

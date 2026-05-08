@@ -1,14 +1,13 @@
 """Definition for the Bellman-Ford multi-solution algorithm."""
 
 from clrs._src.specs import Location, Stage, Type
-from clrs._src.multi_sol.algorithms import graphs
 from clrs._src.multi_sol.algorithms.bellman_ford import generator
 from clrs._src.multi_sol.core import definitions
 from clrs._src.multi_sol.data import adapters
 from clrs._src.multi_sol.evaluation import definition_evaluation
 from clrs._src.multi_sol.sampling import bellman_ford as bf_sampling
 from clrs._src.multi_sol.sampling import dfs as dfs_sampling
-from clrs._src.multi_sol.validation import bellman_ford as bf_validation
+from clrs._src.multi_sol.algorithms.bellman_ford import validator as bf_validation
 from clrs._src.multi_sol import samplers
 
 
@@ -18,7 +17,7 @@ TRAINING_DISTRIBUTION = definitions.TrainingDistribution(
 )
 
 RANDOMIZED_ALGORITHM = definitions.RandomizedAlgorithm(
-    sample_solution=graphs.bellman_ford_multi,
+    sample_solution=generator.sample_solution,
     uses_source_node=True,
 )
 

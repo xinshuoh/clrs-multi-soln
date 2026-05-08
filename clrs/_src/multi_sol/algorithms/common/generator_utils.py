@@ -1,4 +1,4 @@
-"""Shared helpers for multi-solution graph target generators."""
+"""Shared utilities for multi-solution graph target generators."""
 
 from __future__ import annotations
 

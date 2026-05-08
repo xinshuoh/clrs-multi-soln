@@ -1,14 +1,10 @@
 """Definition for the BFS multi-solution algorithm."""
 
 from clrs._src.specs import Location, Stage, Type
-from clrs._src.multi_sol.algorithms import graphs
-from clrs._src.multi_sol.algorithms.bfs import generator
+from clrs._src.multi_sol.algorithms.bfs import extractors, generator, validator
 from clrs._src.multi_sol.core import definitions
 from clrs._src.multi_sol.data import adapters
 from clrs._src.multi_sol.evaluation import definition_evaluation
-from clrs._src.multi_sol.sampling import bfs as bfs_sampling
-from clrs._src.multi_sol.sampling import dfs as dfs_sampling
-from clrs._src.multi_sol.validation import bfs as bfs_validation
 from clrs._src.multi_sol import samplers
 
 
@@ -18,7 +14,7 @@ TRAINING_DISTRIBUTION = definitions.TrainingDistribution(
 )
 
 RANDOMIZED_ALGORITHM = definitions.RandomizedAlgorithm(
-    sample_solution=graphs.bfs_multi,
+    sample_solution=generator.sample_solution,
     uses_source_node=True,
 )
 
@@ -44,25 +40,23 @@ def _sample_randomized_bfs_algorithm(adjacency, source_nodes, rng):
 
 SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
     batch_extractor=adapters.extract_bfs_graph_and_source,
-    validation_method=bfs_validation.check_valid_bfs_tree,
+    validation_method=validator.check_valid_bfs_tree,
     extraction_methods=(
         definitions.ExtractionMethod.same_sampler(
             "Categorical",
-            lambda data, _batch: bfs_sampling.sample_bfs_categorical(data),
+            extractors.extract_categorical,
         ),
         definitions.ExtractionMethod.same_sampler(
             "Random",
-            lambda data, _batch: dfs_sampling.sample_random_list(data),
+            extractors.extract_random,
         ),
         definitions.ExtractionMethod.same_sampler(
             "Prim",
-            lambda data, batch: bfs_sampling.sample_bfs_prim(
-                data, batch.source_nodes),
+            extractors.extract_prim,
         ),
         definitions.ExtractionMethod.same_sampler(
             "Beam",
-            lambda data, batch: bfs_sampling.sample_bfs_beam(
-                data, batch.source_nodes, beam_width=3),
+            extractors.extract_beam,
         ),
     ),
     generator_sampling_source=definitions.GeneratorSamplingSource(
@@ -94,7 +88,10 @@ DEFINITION = definitions.MultiSolAlgorithm(
     spec=SPEC,
     sampler_class=samplers.BfsMultiSampler,
     algorithm=generator.bfs_multi,
+    generator=generator.bfs_multi,
     evaluator=evaluate_bfs_multisol_batch,
+    extractors=extractors.EXTRACTORS,
+    validator=validator.check_valid_bfs_tree,
     training_distribution=TRAINING_DISTRIBUTION,
     randomized_algorithm=RANDOMIZED_ALGORITHM,
     solution_space=SOLUTION_SPACE,

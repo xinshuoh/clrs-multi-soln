@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from clrs._src.multi_sol.sampling import base
-from clrs._src.multi_sol.data.distribution import extract_probability_matrices
+from clrs._src.multi_sol.algorithms.common import extractor_utils
 
 
 def sample_argmax(outs_or_preds):
   trees = []
-  for prob_matrix in extract_probability_matrices(outs_or_preds):
+  for prob_matrix in extractor_utils.extract_prob_matrices(outs_or_preds):
     trees.append(np.argmax(prob_matrix, axis=1))
   return trees
 
@@ -33,7 +32,7 @@ def sample_argmax_listofdatapoint(outputs):
 
 def sample_random_list(outs_or_preds):
   trees = []
-  for prob_matrix in extract_probability_matrices(outs_or_preds):
+  for prob_matrix in extractor_utils.extract_prob_matrices(outs_or_preds):
     pi = [np.random.randint(len(row)) for row in prob_matrix]
     trees.append(pi)
   return trees
@@ -46,11 +45,11 @@ def leafiness_sort(prob_matrix):
 
 
 def row_wise_prob(prob_matrix):
-  return base.normalize_rows(np.asarray(prob_matrix))
+  return extractor_utils.normalize_rows(np.asarray(prob_matrix))
 
 
 def choose_uniformly(not_prob_array):
-  return base.sample_index(not_prob_array, fallback="uniform")
+  return extractor_utils.sample_index(not_prob_array, fallback="uniform")
 
 
 # Legacy compatibility aliases.
@@ -87,7 +86,7 @@ def single_sample_upwards(prob_matrix):
 
 def sample_upwards(outs_or_preds):
   return [single_sample_upwards(prob_matrix)
-          for prob_matrix in extract_probability_matrices(outs_or_preds)]
+          for prob_matrix in extractor_utils.extract_prob_matrices(outs_or_preds)]
 
 
 def explore_upwards(orphan_ix, parent_guesses, prob_matrix):
@@ -112,12 +111,12 @@ def get_parent_tree_upwards(prob_matrix):
 
 def sample_altUpwards(outs_or_preds):
   return [get_parent_tree_upwards(prob_matrix)
-          for prob_matrix in extract_probability_matrices(outs_or_preds)]
+          for prob_matrix in extractor_utils.extract_prob_matrices(outs_or_preds)]
 
 
 def extract_probMatrices(outs_or_preds):
   """Compatibility alias for legacy call sites."""
-  return extract_probability_matrices(outs_or_preds)
+  return extractor_utils.extract_prob_matrices(outs_or_preds)
 
 __all__ = (
     "sample_argmax",

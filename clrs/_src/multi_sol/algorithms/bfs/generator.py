@@ -9,7 +9,7 @@ import numpy as np
 
 from clrs._src import probing
 from clrs._src import specs
-from clrs._src.multi_sol.algorithms import common
+from clrs._src.multi_sol.algorithms.common import generator_utils
 
 _Array = np.ndarray
 _Out = Tuple[_Array, probing.ProbesDict]
@@ -18,7 +18,7 @@ _Out = Tuple[_Array, probing.ProbesDict]
 def bfs_multi(A: _Array, s: int, seed: int, deterministic: bool = False) -> _Out:
   """Multiple-solution breadth-first search target generation."""
   chex.assert_rank(A, 2)
-  return common.generate_parent_distribution_target(
+  return generator_utils.generate_parent_distribution_target(
       algorithm_name="bfs_multi",
       num_nodes=A.shape[0],
       seed=seed,
@@ -26,6 +26,13 @@ def bfs_multi(A: _Array, s: int, seed: int, deterministic: bool = False) -> _Out
       run_single=lambda rng, algorithm_spec, deterministic: _bfs_execution(
           A, s, rng, algorithm_spec, deterministic),
   )
+
+
+def sample_solution(A: _Array, s: int, rng, deterministic: bool = False) -> _Array:
+  """Sample a single BFS parent tree using generator-owned logic."""
+  algorithm_spec = generator_utils.resolve_multisol_spec("bfs_multi")
+  parent_tree, _ = _bfs_execution(A, s, rng, algorithm_spec, deterministic)
+  return parent_tree
 
 
 def _bfs_execution(A, s, rng, algorithm_spec, deterministic):

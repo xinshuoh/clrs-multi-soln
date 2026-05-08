@@ -1,71 +1,29 @@
-"""Sampler classes for multi-solution algorithms."""
+"""Compatibility aliases for multi-solution samplers.
 
-from typing import Tuple
+Multi-solution sampler classes are now defined in `clrs._src.samplers`.
+"""
 
-from clrs._src.samplers import Sampler
-
-
-class DfsMultiSampler(Sampler):
-  """DFS sampler that passes seed for multi-solution generation."""
-
-  def _sample_data(
-      self,
-      length: int,
-      p: Tuple[float, ...] = (0.5,),
-  ):
-    graph = self._random_er_graph(
-        nb_nodes=length,
-        p=self._rng.choice(p),
-        directed=True,
-        acyclic=False,
-        weighted=False)
-    sub_seed = int(self._rng.randint(0, 2**31))
-    return [graph, sub_seed]
+from clrs._src import samplers as base_samplers
 
 
-class BfsMultiSampler(Sampler):
-  """BFS sampler that passes seed for multi-solution generation."""
-
-  def _sample_data(
-      self,
-      length: int,
-      p: Tuple[float, ...] = (0.5,),
-  ):
-    graph = self._random_er_graph(
-        nb_nodes=length,
-        p=self._rng.choice(p),
-        directed=False,
-        acyclic=False,
-        weighted=False)
-    source_node = int(self._rng.choice(length))
-    sub_seed = int(self._rng.randint(0, 2**31))
-    return [graph, source_node, sub_seed]
+class DfsMultiSampler(base_samplers.DfsMultiSampler):
+  pass
 
 
-class BellmanFordMultiSampler(Sampler):
-  """Bellman-Ford sampler with per-instance seed for multi-solution labels."""
+class BfsMultiSampler(base_samplers.BfsMultiSampler):
+  pass
 
-  def _sample_data(
-      self,
-      length: int,
-      p: Tuple[float, ...] = (0.5,),
-      low: int = 1,
-      high: int = 3,
-  ):
-    graph = self._few_weights_random_er_graph(
-        nb_nodes=length,
-        p=self._rng.choice(p),
-        directed=False,
-        acyclic=False,
-        weighted=True,
-        low=low,
-        high=high)
-    source_node = int(self._rng.choice(length))
-    sub_seed = int(self._rng.randint(0, 2**31))
-    return [graph, source_node, sub_seed]
 
-MSTPrimSampler = BellmanFordMultiSampler
-MSTPrimMultiSampler = BellmanFordMultiSampler
+class BellmanFordMultiSampler(base_samplers.BellmanFordMultiSampler):
+  pass
+
+
+class MSTPrimSampler(base_samplers.MSTPrimSampler):
+  pass
+
+
+class MSTPrimMultiSampler(base_samplers.MSTPrimMultiSampler):
+  pass
 
 __all__ = (
     "DfsMultiSampler",

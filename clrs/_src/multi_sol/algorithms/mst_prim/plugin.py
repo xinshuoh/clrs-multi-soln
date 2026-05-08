@@ -2,14 +2,14 @@
 
 from typing import Dict
 
-from clrs._src.multi_sol.algorithms import graphs
+from clrs._src.multi_sol.algorithms.mst_prim import generator
 from clrs._src.multi_sol.algorithms.mst_prim import definition
 from clrs._src.multi_sol.evaluation import batch_evaluation
 
 
 distribution_validation = batch_evaluation.distribution_validation
 _sample_randomized_prim_algorithm = definition._sample_randomized_prim_algorithm
-_randomized_prim_tree = graphs.mst_prim_multi
+_randomized_prim_tree = generator.sample_solution
 
 
 def evaluate_mst_prim_multisol_batch(

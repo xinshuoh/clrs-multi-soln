@@ -2,16 +2,16 @@
 
 import networkx as nx
 
-from clrs._src.multi_sol.validation import check_graphs
+from clrs._src.multi_sol.algorithms.common import validator_utils
 
 
 def check_valid_bfsTree(adjacency, pi, s):
   """Validate bfs_multi parent choices including level tie-break consistency."""
-  if not check_graphs.is_square_adjacency(adjacency):
+  if not validator_utils.is_square_adjacency(adjacency):
     return False
 
   n = adjacency.shape[0]
-  pi = check_graphs.coerce_parent_array(pi, n)
+  pi = validator_utils.coerce_parent_array(pi, n)
   if pi is None:
     return False
 

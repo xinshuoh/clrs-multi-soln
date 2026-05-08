@@ -16,8 +16,8 @@ def ensure_builtin_extensions_registered() -> None:
   if _BUILTINS_REGISTERED:
     return
   # Lazy import to avoid circular dependency at module import time.
-  from clrs._src.multi_sol.algorithms import builtins
-  for definition in builtins.BUILTIN_DEFINITIONS:
+  from clrs._src.multi_sol import catalog
+  for definition in catalog.BUILTIN_DEFINITIONS:
     register_extension(definition)
   _BUILTINS_REGISTERED = True
 

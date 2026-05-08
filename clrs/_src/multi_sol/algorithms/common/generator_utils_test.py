@@ -3,7 +3,7 @@
 from absl.testing import absltest
 import numpy as np
 
-from clrs._src.multi_sol.algorithms import common
+from clrs._src.multi_sol.algorithms.common import generator_utils
 
 
 class CommonTargetGenerationTest(absltest.TestCase):
@@ -19,7 +19,7 @@ class CommonTargetGenerationTest(absltest.TestCase):
       probes_seen.append(probes)
       return np.asarray([0, index % 2]), probes
 
-    parent_dist, probes = common.generate_parent_distribution_target(
+    parent_dist, probes = generator_utils.generate_parent_distribution_target(
         algorithm_name="bfs_multi",
         num_nodes=2,
         seed=7,
@@ -46,7 +46,7 @@ class CommonTargetGenerationTest(absltest.TestCase):
       probes = {"output": {"node": {"pi": {"data": None}}}}
       return np.asarray([0, 0]), probes
 
-    parent_dist, _ = common.generate_parent_distribution_target(
+    parent_dist, _ = generator_utils.generate_parent_distribution_target(
         algorithm_name="bfs_multi",
         num_nodes=2,
         seed=7,

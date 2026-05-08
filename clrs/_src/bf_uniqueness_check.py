@@ -1,6 +1,6 @@
 import numpy as np
 from clrs._src.multi_sol.sampling import bellman_ford as bf_sampling
-from clrs._src.multi_sol.validation import bellman_ford as bf_validation
+from clrs._src.multi_sol.algorithms.bellman_ford import validator as bf_validation
 
 def check_uniqueness_bf(probMatrices, source_nodes, As, n_samples = 5, method = "beam",values = "model"):
     uniques = []

@@ -1,4 +1,4 @@
-"""DFS validators."""
+"""DFS validator."""
 
 import copy
 import graphlib as gl
@@ -7,7 +7,6 @@ import networkx as nx
 import numpy as np
 
 from clrs._src.algorithms import dfs_verification_tester
-
 
 def replace_self_loops_with_minus1(pi):
   for i in range(len(pi)):
