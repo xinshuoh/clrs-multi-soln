@@ -4,20 +4,20 @@ from __future__ import annotations
 
 import numpy as np
 
-from clrs._src.multi_sol.sampling import dfs as dfs_sampling
+from clrs._src.multi_sol.algorithms.dfs import extractors as dfs_extractors
 from clrs._src.multi_sol.algorithms.common import extractor_utils
 
 
 def extract_argmax(outs_or_preds, _batch):
-  return dfs_sampling.sample_argmax_listofdict(outs_or_preds)
+  return dfs_extractors.extract_argmax(outs_or_preds, _batch)
 
 
 def extract_argmax_true(outs_or_preds, _batch):
-  return dfs_sampling.sample_argmax_listofdatapoint(outs_or_preds)
+  return dfs_extractors.extract_argmax_true(outs_or_preds, _batch)
 
 
 def extract_random(outs_or_preds, _batch):
-  return dfs_sampling.sample_random_list(outs_or_preds)
+  return dfs_extractors.extract_random(outs_or_preds, _batch)
 
 
 def extract_tree(outs_or_preds, batch):

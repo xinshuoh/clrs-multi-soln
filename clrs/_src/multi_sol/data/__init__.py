@@ -1,1 +1,0 @@
-"""Data adapters for multi-solution workflows."""

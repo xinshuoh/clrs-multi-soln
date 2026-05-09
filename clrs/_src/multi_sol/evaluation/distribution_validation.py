@@ -444,7 +444,7 @@ def run_bf_distribution_validation(
     output_dir: str = ".",
 ) -> None:
   """Run Bellman-Ford legacy distribution-validation side effects."""
-  from clrs._src.multi_sol.data.distribution_generation import (
+  from clrs._src.multi_sol.evaluation.distribution_generation import (
       build_bf_validation_payload,
       generate_validation_dataframes,
   )
@@ -481,7 +481,7 @@ def run_dfs_distribution_validation(
     output_dir: str = ".",
 ) -> None:
   """Run DFS legacy distribution-validation side effects."""
-  from clrs._src.multi_sol.data.distribution_generation import (
+  from clrs._src.multi_sol.evaluation.distribution_generation import (
       build_dfs_validation_payload,
       generate_validation_dataframes,
   )

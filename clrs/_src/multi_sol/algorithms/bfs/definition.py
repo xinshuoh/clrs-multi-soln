@@ -3,10 +3,9 @@
 from clrs._src.specs import Location, Stage, Type
 from clrs._src.multi_sol.algorithms.bfs import extractors, generator, validator
 from clrs._src.multi_sol.core import definitions
-from clrs._src.multi_sol.data import adapters
+from clrs._src.multi_sol.evaluation import adapters
 from clrs._src.multi_sol.evaluation import definition_evaluation
-from clrs._src.multi_sol import samplers
-
+from clrs._src import samplers
 
 TRAINING_DISTRIBUTION = definitions.TrainingDistribution(
     num_solutions=20,
@@ -17,7 +16,6 @@ RANDOMIZED_ALGORITHM = definitions.RandomizedAlgorithm(
     sample_solution=generator.sample_solution,
     uses_source_node=True,
 )
-
 
 SPEC = {
     "pos": (Stage.INPUT, Location.NODE, Type.SCALAR),
@@ -62,16 +60,15 @@ SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
     generator_sampling_source=definitions.GeneratorSamplingSource(
         name="BFS",
         source_name="Algorithm",
-        sample_fn=lambda batch, rng: _sample_randomized_bfs_algorithm(
-            batch.adjacency, batch.source_nodes, rng),
+        sample_fn=lambda batch, rng: _sample_randomized_bfs_algorithm(batch.adjacency, batch.
+                                                                      source_nodes, rng),
     ),
     include_source_nodes=True,
 )
 
 
 def evaluate_bfs_multisol_batch(**kwargs):
-  return definition_evaluation.evaluate_definition(
-      definition=DEFINITION, **kwargs)
+  return definition_evaluation.evaluate_definition(definition=DEFINITION, **kwargs)
 
 
 def algorithm_spec():

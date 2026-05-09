@@ -1,15 +1,12 @@
 """Definition for the Bellman-Ford multi-solution algorithm."""
 
 from clrs._src.specs import Location, Stage, Type
-from clrs._src.multi_sol.algorithms.bellman_ford import generator
+from clrs._src.multi_sol.algorithms.bellman_ford import extractors, generator
 from clrs._src.multi_sol.core import definitions
-from clrs._src.multi_sol.data import adapters
+from clrs._src.multi_sol.evaluation import adapters
 from clrs._src.multi_sol.evaluation import definition_evaluation
-from clrs._src.multi_sol.sampling import bellman_ford as bf_sampling
-from clrs._src.multi_sol.sampling import dfs as dfs_sampling
 from clrs._src.multi_sol.algorithms.bellman_ford import validator as bf_validation
-from clrs._src.multi_sol import samplers
-
+from clrs._src import samplers
 
 TRAINING_DISTRIBUTION = definitions.TrainingDistribution(
     num_solutions=20,
@@ -20,7 +17,6 @@ RANDOMIZED_ALGORITHM = definitions.RandomizedAlgorithm(
     sample_solution=generator.sample_solution,
     uses_source_node=True,
 )
-
 
 SPEC = {
     "pos": (Stage.INPUT, Location.NODE, Type.SCALAR),
@@ -48,23 +44,20 @@ SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
     extraction_methods=(
         definitions.ExtractionMethod(
             "Argmax",
-            lambda data, _batch: dfs_sampling.sample_argmax_listofdict(data),
-            lambda data, _batch: dfs_sampling.sample_argmax_listofdatapoint(
-                data),
+            extractors.extract_argmax,
+            extractors.extract_argmax_true,
         ),
         definitions.ExtractionMethod.same_sampler(
             "Random",
-            lambda data, _batch: dfs_sampling.sample_random_list(data),
+            extractors.extract_random,
         ),
         definitions.ExtractionMethod.same_sampler(
             "Beam",
-            lambda data, batch: bf_sampling.sample_beamsearch(
-                batch.adjacency, batch.source_nodes, data),
+            extractors.extract_beam,
         ),
         definitions.ExtractionMethod.same_sampler(
             "Greedy",
-            lambda data, batch: bf_sampling.sample_greedysearch(
-                batch.adjacency, batch.source_nodes, data),
+            extractors.extract_greedy,
         ),
     ),
     generator_sampling_source=definitions.GeneratorSamplingSource(
@@ -77,8 +70,7 @@ SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
 
 
 def evaluate_bf_multisol_batch(**kwargs):
-  return definition_evaluation.evaluate_definition(
-      definition=DEFINITION, **kwargs)
+  return definition_evaluation.evaluate_definition(definition=DEFINITION, **kwargs)
 
 
 def algorithm_spec():

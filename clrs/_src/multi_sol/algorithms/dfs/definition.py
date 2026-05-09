@@ -1,24 +1,18 @@
 """Definition for the DFS multi-solution algorithm."""
 
 from clrs._src.specs import Location, Stage, Type
-from clrs._src.multi_sol.algorithms.dfs import generator, validator
+from clrs._src.multi_sol.algorithms.dfs import extractors, generator, validator
 from clrs._src.multi_sol.core import definitions
-from clrs._src.multi_sol.data import adapters
+from clrs._src.multi_sol.evaluation import adapters
 from clrs._src.multi_sol.evaluation import definition_evaluation
-from clrs._src.multi_sol.sampling import dfs as dfs_sampling
-from clrs._src.multi_sol.algorithms.dfs import validator as dfs_validation
-from clrs._src.multi_sol import samplers
-
+from clrs._src import samplers
 
 TRAINING_DISTRIBUTION = definitions.TrainingDistribution(
     num_solutions=20,
     output_name="pi",
 )
 
-RANDOMIZED_ALGORITHM = definitions.RandomizedAlgorithm(
-    sample_solution=generator.sample_solution,
-)
-
+RANDOMIZED_ALGORITHM = definitions.RandomizedAlgorithm(sample_solution=generator.sample_solution,)
 
 SPEC = {
     "pos": (Stage.INPUT, Location.NODE, Type.SCALAR),
@@ -43,7 +37,7 @@ SPEC = {
 
 
 def _validate_dfs_tree(adjacency, parent_tree, _source):
-  return dfs_validation.check_valid_dfsTree(adjacency, parent_tree)
+  return validator.check_valid_dfs_tree(adjacency, parent_tree)
 
 
 def _sample_randomized_dfs_algorithm(adjacency, rng):
@@ -56,35 +50,32 @@ SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
     extraction_methods=(
         definitions.ExtractionMethod(
             "Argmax",
-            lambda data, _batch: dfs_sampling.sample_argmax_listofdict(data),
-            lambda data, _batch: dfs_sampling.sample_argmax_listofdatapoint(
-                data),
+            extractors.extract_argmax,
+            extractors.extract_argmax_true,
         ),
         definitions.ExtractionMethod.same_sampler(
             "Random",
-            lambda data, _batch: dfs_sampling.sample_random_list(data),
+            extractors.extract_random,
         ),
         definitions.ExtractionMethod.same_sampler(
             "Upwards",
-            lambda data, _batch: dfs_sampling.sample_upwards(data),
+            extractors.extract_upwards,
         ),
         definitions.ExtractionMethod.same_sampler(
             "altUpwards",
-            lambda data, _batch: dfs_sampling.sample_altUpwards(data),
+            extractors.extract_alt_upwards,
         ),
     ),
     generator_sampling_source=definitions.GeneratorSamplingSource(
         name="DFS",
         source_name="Algorithm",
-        sample_fn=lambda batch, rng: _sample_randomized_dfs_algorithm(
-            batch.adjacency, rng),
+        sample_fn=lambda batch, rng: _sample_randomized_dfs_algorithm(batch.adjacency, rng),
     ),
 )
 
 
 def evaluate_dfs_multisol_batch(**kwargs):
-  return definition_evaluation.evaluate_definition(
-      definition=DEFINITION, **kwargs)
+  return definition_evaluation.evaluate_definition(definition=DEFINITION, **kwargs)
 
 
 def algorithm_spec():

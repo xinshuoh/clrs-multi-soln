@@ -1,8 +1,7 @@
 
-from clrs._src.multi_sol.sampling.bellman_ford import BF_beamsearch, BF_greedysearch
-from clrs._src.multi_sol.sampling.dfs import get_parent_tree_upwards, single_sample_upwards
+from clrs._src.multi_sol.algorithms.bellman_ford.extractors import BF_beamsearch, BF_greedysearch
+from clrs._src.multi_sol.algorithms.dfs.extractors import get_parent_tree_upwards, single_sample_upwards
 from clrs._src.multi_sol.algorithms.bellman_ford.validator import check_valid_BFpaths
-from clrs._src.multi_sol.algorithms.dfs.validator import check_valid_dfsTree
 from clrs._src.algorithms.dfs_verification_tester import dfsverify
 from clrs._src.multi_sol.algorithms.common import extractor_utils
 from sciplotlib import style as spstyle

@@ -309,5 +309,5 @@ def _clrs():
 
 
 def _concat_tree():
-  from clrs._src.multi_sol.data import adapters
+  from clrs._src.multi_sol.evaluation import adapters
   return adapters.concat_tree

@@ -1,6 +1,6 @@
 """Bellman-Ford multi-solution package."""
 
-__all__ = ("bellman_ford_multi", "evaluate_bf_multisol_batch")
+__all__ = ("bellman_ford_multi")
 
 
 def __getattr__(name):
@@ -9,9 +9,4 @@ def __getattr__(name):
         bellman_ford_multi,
     )
     return bellman_ford_multi
-  if name == "evaluate_bf_multisol_batch":
-    from clrs._src.multi_sol.algorithms.bellman_ford.plugin import (
-        evaluate_bf_multisol_batch,
-    )
-    return evaluate_bf_multisol_batch
   raise AttributeError(name)
