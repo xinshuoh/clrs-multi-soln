@@ -1,4 +1,4 @@
-"""Adapters to extract algorithm-specific arrays from CLRS feedback."""
+"""Helpers to extract algorithm batches for multi-solution evaluation."""
 
 from __future__ import annotations
 
@@ -14,24 +14,20 @@ def concat_tree(dps, axis):
 
 
 def extract_bfs_graph_and_source(feedback) -> Tuple[np.ndarray, np.ndarray]:
-  """Extract BFS adjacency matrix and source index arrays from CLRS feedback."""
   return _extract_graph_with_source(feedback)
 
 
 def extract_bellman_ford_graph_and_source(
     feedback,
 ) -> Tuple[np.ndarray, np.ndarray]:
-  """Extract Bellman-Ford adjacency matrix and source index arrays."""
   return _extract_graph_with_source(feedback)
 
 
 def extract_mst_prim_graph_and_source(feedback) -> Tuple[np.ndarray, np.ndarray]:
-  """Extract MST-Prim adjacency matrix and source index arrays."""
   return _extract_graph_with_source(feedback)
 
 
 def extract_dfs_graph_and_source(feedback) -> Tuple[np.ndarray, np.ndarray]:
-  """Extract DFS adjacency matrix and synthetic source index arrays."""
   adjacency = feedback[0][0][1].data
   source = np.zeros(adjacency.shape[0], dtype=int)
   return adjacency, source

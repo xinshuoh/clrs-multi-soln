@@ -70,7 +70,7 @@ class SamplersTest(parameterized.TestCase):
     feedback = sampler.next()
 
     inputs = feedback.features.inputs
-    self.assertLen(inputs, 4)
+    self.assertLen(inputs, 3)
     self.assertEqual(inputs[0].name, "pos")
     self.assertEqual(inputs[0].data.shape, (num_samples, num_nodes))
 

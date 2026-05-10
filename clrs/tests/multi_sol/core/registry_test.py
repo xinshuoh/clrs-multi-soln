@@ -1,7 +1,6 @@
 """Tests for multi-solution extension registry overlays."""
 
 import pathlib
-import re
 
 from absl.testing import absltest
 
@@ -10,6 +9,7 @@ from clrs._src import specs
 from clrs._src.multi_sol.algorithms.bellman_ford import generator as bf_generator
 from clrs._src.multi_sol.algorithms.bfs import generator as bfs_generator
 from clrs._src.multi_sol.algorithms.dfs import generator as dfs_generator
+from clrs._src.multi_sol.evaluation import pipeline
 from clrs._src.multi_sol.core import registry
 
 
@@ -32,13 +32,13 @@ class MultiSolRegistryTest(absltest.TestCase):
       self.assertNotIn(name, specs.SPECS)
       self.assertNotIn(name, specs.CLRS_30_ALGS)
 
-  def test_core_modules_do_not_branch_on_multisol_type(self):
+  def test_core_type_handling_does_not_import_multisol_policies(self):
     source_root = pathlib.Path(__file__).resolve().parents[3] / "_src"
-    type_branch = re.compile(r"(if|elif)\s+.*Type\.POINTER_DISTRIBUTION")
     for module_name in ("decoders.py", "losses.py", "evaluation.py"):
       with self.subTest(module_name=module_name):
         source = (source_root / module_name).read_text(encoding="utf-8")
-        self.assertIsNone(type_branch.search(source))
+        self.assertNotIn("multi_sol.training", source)
+        self.assertNotIn("multi_sol.evaluation.output_types", source)
 
   def test_extension_algorithms_include_multisol(self):
     extended = registry.get_extension_algorithms(specs.CLRS_30_ALGS)
@@ -51,11 +51,11 @@ class MultiSolRegistryTest(absltest.TestCase):
       self.assertIsNotNone(extension)
       self.assertIsNotNone(extension.sampler_class)
 
-  def test_builtin_extensions_expose_algorithms(self):
+  def test_builtin_extensions_expose_generators(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
       extension = registry.get_extension(name)
       self.assertIsNotNone(extension)
-      self.assertIsNotNone(extension.algorithm)
+      self.assertIsNotNone(extension.generator)
 
   def test_builtin_extensions_expose_specs(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
@@ -71,7 +71,7 @@ class MultiSolRegistryTest(absltest.TestCase):
       self.assertEqual(sampler_class.__module__, "clrs._src.samplers")
       self.assertIs(samplers.SAMPLERS[name], sampler_class)
 
-  def test_multisol_algorithms_are_injected_from_multisol_module(self):
+  def test_multisol_generators_are_injected_from_multisol_module(self):
     expected_algorithms = {
         "dfs_multi": dfs_generator.dfs_multi,
         "bfs_multi": bfs_generator.bfs_multi,
@@ -80,9 +80,9 @@ class MultiSolRegistryTest(absltest.TestCase):
     for name, expected_algorithm in expected_algorithms.items():
       extension = registry.get_extension(name)
       self.assertIsNotNone(extension)
-      algorithm_fn = extension.algorithm
-      self.assertIn(".generator", algorithm_fn.__module__)
-      self.assertIs(algorithm_fn, expected_algorithm)
+      generator_fn = extension.generator
+      self.assertIn(".generator", generator_fn.__module__)
+      self.assertIs(generator_fn, expected_algorithm)
 
   def test_build_sampler_uses_injected_multisol_sampler_classes(self):
     expected_algorithms = {
@@ -95,11 +95,11 @@ class MultiSolRegistryTest(absltest.TestCase):
       self.assertEqual(type(sampler).__module__, "clrs._src.samplers")
       self.assertIs(sampler._algorithm, expected_algorithm)  # pylint: disable=protected-access
 
-  def test_builtin_extensions_expose_evaluators(self):
+  def test_builtin_extensions_use_generic_sampling_evaluator(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
       extension = registry.get_extension(name)
       self.assertIsNotNone(extension)
-      self.assertIsNotNone(extension.evaluator)
+      self.assertIsNotNone(pipeline.build_definition_evaluator(extension))
 
   def test_builtin_extensions_expose_solution_spaces(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
@@ -116,7 +116,13 @@ class MultiSolRegistryTest(absltest.TestCase):
       self.assertIsNotNone(extension)
       self.assertEqual(extension.training_distribution.num_solutions, 20)
       self.assertEqual(extension.training_distribution.output_name, "pi")
-      self.assertIsNotNone(extension.randomized_algorithm)
+
+  def test_builtin_extensions_can_sample_from_algorithm_source(self):
+    for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
+      extension = registry.get_extension(name)
+      self.assertIsNotNone(extension)
+      self.assertIsNotNone(extension.solution_space)
+      self.assertIsNotNone(extension.solution_space.generator_sampling_source)
 
 
 if __name__ == "__main__":

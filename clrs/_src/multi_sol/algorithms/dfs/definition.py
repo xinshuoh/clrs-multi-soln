@@ -3,8 +3,7 @@
 from clrs._src.specs import Location, Stage, Type
 from clrs._src.multi_sol.algorithms.dfs import extractors, generator, validator
 from clrs._src.multi_sol.core import definitions
-from clrs._src.multi_sol.evaluation import adapters
-from clrs._src.multi_sol.evaluation import definition_evaluation
+from clrs._src.multi_sol.algorithms.common import batch_extractors
 from clrs._src import samplers
 
 TRAINING_DISTRIBUTION = definitions.TrainingDistribution(
@@ -45,7 +44,7 @@ def _sample_randomized_dfs_algorithm(adjacency, rng):
 
 
 SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
-    batch_extractor=adapters.extract_dfs_graph_and_source,
+    batch_extractor=batch_extractors.extract_dfs_graph_and_source,
     validation_method=_validate_dfs_tree,
     extraction_methods=(
         definitions.ExtractionMethod(
@@ -74,26 +73,12 @@ SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
 )
 
 
-def evaluate_dfs_multisol_batch(**kwargs):
-  return definition_evaluation.evaluate_definition(definition=DEFINITION, **kwargs)
-
-
-def algorithm_spec():
-  return SPEC
-
-
-def training_distribution():
-  return TRAINING_DISTRIBUTION
-
-
 DEFINITION = definitions.MultiSolAlgorithm(
     algorithm_name="dfs_multi",
     base_algorithm_name="dfs",
     spec=SPEC,
+    generator=generator.dfs_multi,
     sampler_class=samplers.DfsMultiSampler,
-    algorithm=generator.dfs_multi,
-    evaluator=evaluate_dfs_multisol_batch,
     training_distribution=TRAINING_DISTRIBUTION,
-    randomized_algorithm=RANDOMIZED_ALGORITHM,
     solution_space=SOLUTION_SPACE,
 )

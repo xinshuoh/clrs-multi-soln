@@ -9,7 +9,6 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 SpecFactory = Callable[[Dict[str, Dict[str, Any]]], Dict[str, Any]]
 Algorithm = Callable[..., Any]
-EvaluatorFn = Callable[..., dict]
 SpecProvider = Dict[str, Any] | SpecFactory
 BatchExtractor = Callable[[Any], Tuple[Any, Any]]
 ValidatorFn = Callable[[Any, object, int], bool]
@@ -107,34 +106,8 @@ class MultiSolAlgorithm:
   algorithm_name: str
   base_algorithm_name: str
   spec: SpecProvider
-  sampler_class: Optional[type] = None
-  algorithm: Optional[Algorithm] = None
-  generator: Optional[Algorithm] = None
-  evaluator: Optional[EvaluatorFn] = None
-  extractors: Dict[str, ExtractorFn] = dataclasses.field(default_factory=dict)
-  validator: Optional[ValidatorFn] = None
+  generator: Algorithm
+  sampler_class: type
   training_distribution: TrainingDistribution = dataclasses.field(
       default_factory=TrainingDistribution)
-  randomized_algorithm: Optional[RandomizedAlgorithm] = None
-  solution_space: Optional[MultiSolSolutionSpace] = None
-
-  def __post_init__(self):
-    if self.generator is None and self.algorithm is not None:
-      object.__setattr__(self, "generator", self.algorithm)
-    if self.algorithm is None and self.generator is not None:
-      object.__setattr__(self, "algorithm", self.generator)
-    if not self.extractors and self.solution_space is not None:
-      object.__setattr__(
-          self,
-          "extractors",
-          {
-              method.name: method.model_distribution_sample
-              for method in self.solution_space.extraction_methods
-          },
-      )
-    if self.validator is None and self.solution_space is not None:
-      object.__setattr__(
-          self,
-          "validator",
-          self.solution_space.validation_method,
-      )
+  solution_space: MultiSolSolutionSpace | None = None

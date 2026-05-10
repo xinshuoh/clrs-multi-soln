@@ -294,8 +294,8 @@ def build_sampler(
     raise NotImplementedError(f'No implementation of algorithm {name}.')
   spec = resolved_specs[name]
   extension = multisol_registry.get_extension(name)
-  if extension is not None and extension.algorithm is not None:
-    algorithm = extension.algorithm
+  if extension is not None:
+    algorithm = extension.generator
   else:
     algorithm = getattr(algorithms, name)
   sampler_class = SAMPLERS[name]

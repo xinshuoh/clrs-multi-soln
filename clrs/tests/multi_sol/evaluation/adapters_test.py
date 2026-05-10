@@ -4,7 +4,7 @@ from absl.testing import absltest
 
 import numpy as np
 
-from clrs._src.multi_sol.evaluation import adapters
+from clrs._src.multi_sol.algorithms.common import batch_extractors
 
 
 class DummyDataPoint:
@@ -36,7 +36,7 @@ class FeedbackAdaptersTest(absltest.TestCase):
         DummyDataPoint(adjacency),
     ])
 
-    extracted_adjacency, source_nodes = adapters.extract_dfs_graph_and_source(
+    extracted_adjacency, source_nodes = batch_extractors.extract_dfs_graph_and_source(
         feedback)
 
     np.testing.assert_array_equal(extracted_adjacency, adjacency)
@@ -47,7 +47,7 @@ class FeedbackAdaptersTest(absltest.TestCase):
     source_one_hot = np.asarray([[0, 1]])
     feedback = _source_graph_feedback(source_one_hot, adjacency)
 
-    extracted_adjacency, source_nodes = adapters.extract_bfs_graph_and_source(
+    extracted_adjacency, source_nodes = batch_extractors.extract_bfs_graph_and_source(
         feedback)
 
     np.testing.assert_array_equal(extracted_adjacency, adjacency)
@@ -59,7 +59,7 @@ class FeedbackAdaptersTest(absltest.TestCase):
     feedback = _source_graph_feedback(source_one_hot, adjacency)
 
     extracted_adjacency, source_nodes = (
-        adapters.extract_bellman_ford_graph_and_source(feedback))
+        batch_extractors.extract_bellman_ford_graph_and_source(feedback))
 
     np.testing.assert_array_equal(extracted_adjacency, adjacency)
     np.testing.assert_array_equal(source_nodes, np.asarray([0]))
@@ -70,7 +70,7 @@ class FeedbackAdaptersTest(absltest.TestCase):
     feedback = _source_graph_feedback(source_one_hot, adjacency)
 
     extracted_adjacency, source_nodes = (
-        adapters.extract_mst_prim_graph_and_source(feedback))
+        batch_extractors.extract_mst_prim_graph_and_source(feedback))
 
     np.testing.assert_array_equal(extracted_adjacency, adjacency)
     np.testing.assert_array_equal(source_nodes, np.asarray([1]))

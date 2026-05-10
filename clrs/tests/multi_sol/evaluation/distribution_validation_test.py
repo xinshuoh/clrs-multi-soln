@@ -56,28 +56,13 @@ class DistributionValidationTest(absltest.TestCase):
 
     self.calls = {}
 
-    data_gen_module = types.ModuleType(
-        "clrs._src.multi_sol.evaluation.distribution_generation")
-    def _build_bf_payload(**kwargs):
-      self.calls["bf_payload"] = kwargs
-      return types.SimpleNamespace(graph_size=3)
-
-    def _build_dfs_payload(**kwargs):
-      self.calls["dfs_payload"] = kwargs
-      return types.SimpleNamespace(graph_size=4)
-
-    def _generate_validation_dataframes(**kwargs):
-      self.calls["gen_kwargs"] = kwargs
-      return ["u"], ["e"]
-
-    data_gen_module.build_bf_validation_payload = _build_bf_payload
-    data_gen_module.build_dfs_validation_payload = _build_dfs_payload
-    data_gen_module.generate_validation_dataframes = (
-        _generate_validation_dataframes)
-    self._install_module("clrs._src.multi_sol.evaluation.distribution_generation",
-                         data_gen_module)
-
     validate_module = types.ModuleType("clrs._src.validate_distributions")
+    def _validate_distributions(**kwargs):
+      self.calls.setdefault("validate_calls", []).append(kwargs)
+      if kwargs.get("flag") in ("BF", "DFS"):
+        return ["u"], [], []
+      return ["e"], [], []
+
     def _plot_bf_unique(dataframes, graph_size, output_dir="."):
       self.calls["plot_bf_unique"] = (dataframes, graph_size, output_dir)
 
@@ -102,15 +87,16 @@ class DistributionValidationTest(absltest.TestCase):
     validate_module.plot_n_unique_by_n_extracted_dfs = _plot_dfs_unique
     validate_module.plot_edge_reuse_matrix_list_mean_dfs = _plot_dfs_reuse
     validate_module.line_plot_dfs = _plot_dfs_line
+    validate_module.validate_distributions = _validate_distributions
     self._install_module("clrs._src.validate_distributions", validate_module)
 
     module_path = (
         self._repo_root / "clrs" / "_src" / "multi_sol" / "evaluation" /
-        "distribution_validation.py")
+        "sampling_metrics.py")
     spec = importlib.util.spec_from_file_location(
-        "clrs._src.multi_sol.evaluation.distribution_validation", str(module_path))
+        "clrs._src.multi_sol.evaluation.sampling_metrics", str(module_path))
     module = importlib.util.module_from_spec(spec)
-    self._install_module("clrs._src.multi_sol.evaluation.distribution_validation",
+    self._install_module("clrs._src.multi_sol.evaluation.sampling_metrics",
                          module)
     assert spec.loader is not None
     spec.loader.exec_module(module)
@@ -118,37 +104,39 @@ class DistributionValidationTest(absltest.TestCase):
 
   def test_run_bf_distribution_validation(self):
     module = self._load_module_with_stubs()
+    outputs = [types.SimpleNamespace(data=np.ones((2, 3)))]
+    preds = {"pi": types.SimpleNamespace(data=np.ones((2, 3, 3)))}
     module.run_bf_distribution_validation(
         adjacency=np.ones((2, 3, 3)),
         source_nodes=np.asarray([0, 1]),
-        outputs={"o": 1},
-        preds={"p": 2},
+        outputs=outputs,
+        preds=preds,
         nse=55,
         output_dir="results/run-1",
     )
 
-    self.assertEqual(self.calls["bf_payload"]["outputs"], {"o": 1})
-    self.assertEqual(self.calls["bf_payload"]["preds"], {"p": 2})
-    self.assertEqual(self.calls["gen_kwargs"]["nse"], 55)
-    self.assertEqual(self.calls["gen_kwargs"]["mode"], "BF")
+    self.assertEqual(len(self.calls["validate_calls"]), 2)
+    self.assertEqual(self.calls["validate_calls"][0]["numSolsExtracting"], 55)
+    self.assertEqual(self.calls["validate_calls"][0]["flag"], "BF")
     self.assertEqual(self.calls["plot_bf_unique"], (["u"], 3, "results/run-1"))
     self.assertEqual(self.calls["plot_bf_reuse"], (["e"], 3, "results/run-1"))
     self.assertEqual(self.calls["plot_bf_line"], (["e"], 3, "results/run-1"))
 
   def test_run_dfs_distribution_validation(self):
     module = self._load_module_with_stubs()
+    outputs = [types.SimpleNamespace(data=np.ones((2, 4)))]
+    pred_batches = [{"pi": types.SimpleNamespace(data=np.ones((2, 4, 4)))}]
     module.run_dfs_distribution_validation(
         adjacency=np.ones((2, 4, 4)),
-        outputs={"o": 1},
-        pred_batches=[{"p": 2}],
+        outputs=outputs,
+        pred_batches=pred_batches,
         nse=44,
         output_dir="results/run-2",
     )
 
-    self.assertEqual(self.calls["dfs_payload"]["outputs"], {"o": 1})
-    self.assertEqual(self.calls["dfs_payload"]["preds"], [{"p": 2}])
-    self.assertEqual(self.calls["gen_kwargs"]["nse"], 44)
-    self.assertEqual(self.calls["gen_kwargs"]["mode"], "DFS")
+    self.assertEqual(len(self.calls["validate_calls"]), 2)
+    self.assertEqual(self.calls["validate_calls"][0]["numSolsExtracting"], 44)
+    self.assertEqual(self.calls["validate_calls"][0]["flag"], "DFS")
     self.assertEqual(self.calls["plot_dfs_unique"], (["u"], 4, "results/run-2"))
     self.assertEqual(self.calls["plot_dfs_reuse"], (["e"], 4, "results/run-2"))
     self.assertEqual(self.calls["plot_dfs_line"], (["e"], 4, "results/run-2"))

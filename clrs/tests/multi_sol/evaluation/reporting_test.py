@@ -6,14 +6,14 @@ import tempfile
 
 from absl.testing import absltest
 
-from clrs._src.multi_sol.evaluation import reporting
+from clrs._src.multi_sol.evaluation import artifacts
 
 
 class ReportingTest(absltest.TestCase):
 
   def test_save_csv_report_without_timestamp_uses_exact_name(self):
     with tempfile.TemporaryDirectory() as tmpdir:
-      reporting.save_csv_report(
+      artifacts.save_csv_report(
           {"metric": [1.0]},
           "legacy_eval",
           output_dir=tmpdir,
@@ -25,7 +25,7 @@ class ReportingTest(absltest.TestCase):
   def test_save_pickle_report_without_timestamp_uses_exact_name(self):
     with tempfile.TemporaryDirectory() as tmpdir:
       payload = {"metric": [1.0]}
-      reporting.save_pickle_report(
+      artifacts.save_pickle_report(
           payload,
           "legacy_eval",
           output_dir=tmpdir,

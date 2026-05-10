@@ -32,8 +32,8 @@ import numpy as np
 import requests
 import tensorflow as tf
 
-from clrs._src.multi_sol.evaluation import dispatch as multisol_dispatch
-from clrs._src.multi_sol.evaluation import reporting as multisol_reporting
+from clrs._src.multi_sol.evaluation import artifacts as multisol_artifacts
+from clrs._src.multi_sol.evaluation import pipeline as multisol_eval_pipeline
 
 
 flags.DEFINE_list('algorithms', ['bfs'], 'Which algorithms to run.')
@@ -709,7 +709,7 @@ def _effective_validation_profile() -> str:
   return FLAGS.val_evaluation_profile
 
 
-def _extension_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
+def _sampling_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
   kwargs = {
       'vd_flag': FLAGS.validate_distributions,
       'NSE': FLAGS.NSE,
@@ -728,7 +728,7 @@ def _sampling_report_sink(split: str, profile: str, run_dir: str):
   if split != 'test' or profile != 'sampling':
     return None
   return functools.partial(
-      multisol_reporting.save_csv_report,
+      multisol_artifacts.save_csv_report,
       output_dir=run_dir,
       timestamped=False,
   )
@@ -795,7 +795,7 @@ def _save_seed_summary(test_rows, run_dir: str) -> None:
   if not test_rows:
     return
 
-  multisol_reporting.save_csv_report(
+  multisol_artifacts.save_csv_report(
       test_rows,
       'seed-test-results',
       output_dir=run_dir,
@@ -823,7 +823,7 @@ def _save_seed_summary(test_rows, run_dir: str) -> None:
           'Std': float(np.std(values, ddof=1)) if len(values) > 1 else 0.0,
           'Num Seeds': len(values),
       })
-  multisol_reporting.save_csv_report(
+  multisol_artifacts.save_csv_report(
       summary_rows,
       'seed-test-summary',
       output_dir=run_dir,
@@ -1089,7 +1089,7 @@ def _run_single_seed(seed: int, run_dir: str):
 
         # Validation info.
         new_rng_key, rng_key = jax.random.split(rng_key)
-        val_stats = multisol_dispatch.evaluate_with_registry(
+        val_stats = multisol_eval_pipeline.evaluate_with_sampling_registry(
             algorithm_name=FLAGS.algorithms[algo_idx],
             split='val',
             profile=validation_profile,
@@ -1102,7 +1102,7 @@ def _run_single_seed(seed: int, run_dir: str):
             artifact_prefix=FLAGS.sampling_artifact_prefix,
             save_artifacts=False,
             fallback_eval_fn=collect_and_eval,
-            extension_kwargs=_extension_eval_kwargs(split='val', run_dir=run_dir),
+            sampling_kwargs=_sampling_eval_kwargs(split='val', run_dir=run_dir),
             report_sink=_sampling_report_sink(
                 split='val', profile=validation_profile, run_dir=run_dir),
         )
@@ -1157,7 +1157,7 @@ def _run_single_seed(seed: int, run_dir: str):
     eval_model.restore_model('best.pkl', only_load_processor=False)
 
   if FLAGS.save_df and collect_results_df:
-    multisol_reporting.save_csv_report(
+    multisol_artifacts.save_csv_report(
         metric_rows,
         _default_results_df_filename(),
         output_dir=run_dir,
@@ -1177,7 +1177,7 @@ def _run_single_seed(seed: int, run_dir: str):
                      'algorithm': FLAGS.algorithms[algo_idx]}
 
     new_rng_key, rng_key = jax.random.split(rng_key)
-    test_stats = multisol_dispatch.evaluate_with_registry(
+    test_stats = multisol_eval_pipeline.evaluate_with_sampling_registry(
         algorithm_name=FLAGS.algorithms[algo_idx],
         split='test',
         profile=effective_profile,
@@ -1189,7 +1189,7 @@ def _run_single_seed(seed: int, run_dir: str):
         artifact_prefix=FLAGS.sampling_artifact_prefix,
         save_artifacts=FLAGS.save_sampling_artifacts,
         fallback_eval_fn=collect_and_eval,
-        extension_kwargs=_extension_eval_kwargs(split='test', run_dir=run_dir),
+        sampling_kwargs=_sampling_eval_kwargs(split='test', run_dir=run_dir),
         report_sink=_sampling_report_sink(
             split='test', profile=effective_profile, run_dir=run_dir),
     )

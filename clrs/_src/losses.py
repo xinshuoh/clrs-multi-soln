@@ -17,7 +17,6 @@
 from typing import Dict, List, Tuple
 import chex
 
-from clrs._src.multi_sol.training import policies as multisol_policies
 from clrs._src import probing
 from clrs._src import specs
 
@@ -44,6 +43,14 @@ def _expand_to(x: _Array, y: _Array) -> _Array:
 
 def _expand_and_broadcast_to(x: _Array, y: _Array) -> _Array:
   return jnp.broadcast_to(_expand_to(x, y), y.shape)
+
+def _pointer_distribution_kl_elementwise(
+    truth_data: _Array,
+    pred_logits: _Array,
+    epsilon: float = 1e-8,
+) -> _Array:
+  pred_probs = jax.nn.softmax(pred_logits, axis=-1)
+  return jax.scipy.special.kl_div(truth_data, pred_probs + epsilon)
 
 
 def output_loss_chunked(truth: _DataPoint, pred: _Array,
@@ -76,12 +83,11 @@ def output_loss_chunked(truth: _DataPoint, pred: _Array,
     # Compute the cross entropy between doubly stochastic pred and truth_data
     loss = -jnp.sum(truth.data * pred, axis=-1)
 
+  elif truth.type_ == _Type.POINTER_DISTRIBUTION:
+    loss = _pointer_distribution_kl_elementwise(truth.data, pred)
+
   else:
-    custom_loss = multisol_policies.output_loss_elementwise_for_type(
-        truth.type_, truth.data, pred)
-    if custom_loss is None:
-      raise ValueError(f"Invalid output type {truth.type_}")
-    loss = custom_loss
+    raise ValueError(f"Invalid output type {truth.type_}")
 
   if mask is not None:
     mask = mask * _expand_and_broadcast_to(is_last, loss)
@@ -121,12 +127,11 @@ def output_loss(truth: _DataPoint, pred: _Array, nb_nodes: int) -> float:
     # Compute the cross entropy between doubly stochastic pred and truth_data
     total_loss = jnp.mean(-jnp.sum(truth.data * pred, axis=-1))
 
+  elif truth.type_ == _Type.POINTER_DISTRIBUTION:
+    total_loss = jnp.mean(_pointer_distribution_kl_elementwise(truth.data, pred))
+
   else:
-    custom_total = multisol_policies.output_loss_for_type(
-        truth.type_, truth.data, pred)
-    if custom_total is None:
-      raise ValueError(f"Invalid output type {truth.type_}")
-    total_loss = custom_total
+    raise ValueError(f"Invalid output type {truth.type_}")
 
   return total_loss  # pytype: disable=bad-return-type  # jnp-type
 
@@ -213,12 +218,11 @@ def _hint_loss(
     # Compute the cross entropy between doubly stochastic pred and truth_data
     loss = -jnp.sum(truth_data * pred, axis=-1)
 
+  elif truth_type == _Type.POINTER_DISTRIBUTION:
+    loss = _pointer_distribution_kl_elementwise(truth_data, pred)
+
   else:
-    custom_hint_loss = multisol_policies.hint_loss_elementwise_for_type(
-        truth_type, truth_data, pred)
-    if custom_hint_loss is None:
-      raise ValueError(f"Invalid hint type {truth_type}")
-    loss = custom_hint_loss
+    raise ValueError(f"Invalid hint type {truth_type}")
 
   if mask is None:
     mask = jnp.ones_like(loss)

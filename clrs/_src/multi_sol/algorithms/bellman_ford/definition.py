@@ -3,8 +3,7 @@
 from clrs._src.specs import Location, Stage, Type
 from clrs._src.multi_sol.algorithms.bellman_ford import extractors, generator
 from clrs._src.multi_sol.core import definitions
-from clrs._src.multi_sol.evaluation import adapters
-from clrs._src.multi_sol.evaluation import definition_evaluation
+from clrs._src.multi_sol.algorithms.common import batch_extractors
 from clrs._src.multi_sol.algorithms.bellman_ford import validator as bf_validation
 from clrs._src import samplers
 
@@ -39,7 +38,7 @@ def _sample_randomized_bellman_ford_algorithm(adjacency, source_nodes, rng):
 
 
 SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
-    batch_extractor=adapters.extract_bellman_ford_graph_and_source,
+    batch_extractor=batch_extractors.extract_bellman_ford_graph_and_source,
     validation_method=bf_validation.check_valid_bf_paths,
     extraction_methods=(
         definitions.ExtractionMethod(
@@ -69,26 +68,12 @@ SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
 )
 
 
-def evaluate_bf_multisol_batch(**kwargs):
-  return definition_evaluation.evaluate_definition(definition=DEFINITION, **kwargs)
-
-
-def algorithm_spec():
-  return SPEC
-
-
-def training_distribution():
-  return TRAINING_DISTRIBUTION
-
-
 DEFINITION = definitions.MultiSolAlgorithm(
     algorithm_name="bellman_ford_multi",
     base_algorithm_name="bellman_ford",
     spec=SPEC,
+    generator=generator.bellman_ford_multi,
     sampler_class=samplers.BellmanFordMultiSampler,
-    algorithm=generator.bellman_ford_multi,
-    evaluator=evaluate_bf_multisol_batch,
     training_distribution=TRAINING_DISTRIBUTION,
-    randomized_algorithm=RANDOMIZED_ALGORITHM,
     solution_space=SOLUTION_SPACE,
 )

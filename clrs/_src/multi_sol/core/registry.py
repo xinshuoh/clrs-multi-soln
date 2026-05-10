@@ -11,13 +11,25 @@ _EXTENSIONS: Dict[str, MultiSolAlgorithm] = {}
 _BUILTINS_REGISTERED = False
 
 
+def _builtin_definitions() -> Tuple[MultiSolAlgorithm, ...]:
+  # Lazy imports avoid circular import with clrs._src.samplers.
+  from clrs._src.multi_sol.algorithms.bellman_ford import definition as bellman_ford
+  from clrs._src.multi_sol.algorithms.bfs import definition as bfs
+  from clrs._src.multi_sol.algorithms.dfs import definition as dfs
+  from clrs._src.multi_sol.algorithms.mst_prim import definition as mst_prim
+  return (
+      dfs.DEFINITION,
+      bfs.DEFINITION,
+      bellman_ford.DEFINITION,
+      mst_prim.DEFINITION,
+  )
+
+
 def ensure_builtin_extensions_registered() -> None:
   global _BUILTINS_REGISTERED
   if _BUILTINS_REGISTERED:
     return
-  # Lazy import to avoid circular dependency at module import time.
-  from clrs._src.multi_sol import catalog
-  for definition in catalog.BUILTIN_DEFINITIONS:
+  for definition in _builtin_definitions():
     register_extension(definition)
   _BUILTINS_REGISTERED = True
 

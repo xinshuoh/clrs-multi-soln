@@ -17,7 +17,6 @@
 
 from typing import Dict, List, Tuple
 import chex
-from clrs._src.multi_sol.evaluation import policies as multisol_eval_policies
 from clrs._src import probing
 from clrs._src import specs
 import numpy as np
@@ -201,6 +200,11 @@ def _mask_fn(pred, truth):
 
   return f_1
 
+
+def _pointer_distribution_score(pred, truth):
+  return np.mean(1.0 - np.abs(pred - truth))
+
+
 _EVAL_FN = {
     specs.Type.SCALAR:
         lambda pred, truth: np.mean((pred - truth)**2),
@@ -211,6 +215,6 @@ _EVAL_FN = {
         _eval_one,
     specs.Type.POINTER:
         lambda pred, truth: np.mean((pred == truth) * 1.0),
+    specs.Type.POINTER_DISTRIBUTION:
+        _pointer_distribution_score,
 }
-
-_EVAL_FN.update(multisol_eval_policies.registered_type_evals())

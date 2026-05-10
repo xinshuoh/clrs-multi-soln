@@ -5,8 +5,8 @@ import pathlib
 
 from absl.testing import absltest
 
-from clrs._src.multi_sol.evaluation import dispatch
-from clrs._src.multi_sol.evaluation import reporting
+from clrs._src.multi_sol.evaluation import artifacts
+from clrs._src.multi_sol.evaluation import pipeline
 
 
 class RunMultisolDispatchTest(absltest.TestCase):
@@ -36,11 +36,11 @@ class RunMultisolDispatchTest(absltest.TestCase):
     return defaults
 
   def test_default_profile_uses_fallback(self):
-    called = {"fallback": False, "extension": False}
+    called = {"fallback": False, "sampling": False}
 
-    def extension_evaluator(**kwargs):
+    def sampling_evaluator(**kwargs):
       del kwargs
-      called["extension"] = True
+      called["sampling"] = True
       return {"score": 1.0}
 
     def fallback_eval_fn(**kwargs):
@@ -48,10 +48,10 @@ class RunMultisolDispatchTest(absltest.TestCase):
       called["fallback"] = True
       return {"score": 0.5}
 
-    out = dispatch.evaluate_with_optional_extension(
+    out = pipeline.evaluate_with_optional_sampling(
         algorithm_name="dfs_multi",
         profile="default",
-        extension_evaluator=extension_evaluator,
+        sampling_evaluator=sampling_evaluator,
         sampler=object(),
         predict_fn=object(),
         sample_count=3,
@@ -62,15 +62,15 @@ class RunMultisolDispatchTest(absltest.TestCase):
         fallback_eval_fn=fallback_eval_fn,
     )
     self.assertTrue(called["fallback"])
-    self.assertFalse(called["extension"])
+    self.assertFalse(called["sampling"])
     self.assertEqual(out["score"], 0.5)
 
-  def test_sampling_profile_uses_extension(self):
-    called = {"fallback": False, "extension": False}
+  def test_sampling_profile_uses_sampling(self):
+    called = {"fallback": False, "sampling": False}
 
-    def extension_evaluator(**kwargs):
-      called["extension"] = True
-      self.assertIs(kwargs["save_results_fn"], reporting.discard_report)
+    def sampling_evaluator(**kwargs):
+      called["sampling"] = True
+      self.assertIs(kwargs["save_results_fn"], artifacts.discard_report)
       return {"score": 0.9}
 
     def fallback_eval_fn(**kwargs):
@@ -78,10 +78,10 @@ class RunMultisolDispatchTest(absltest.TestCase):
       called["fallback"] = True
       return {"score": 0.1}
 
-    out = dispatch.evaluate_with_optional_extension(
+    out = pipeline.evaluate_with_optional_sampling(
         algorithm_name="dfs_multi",
         profile="sampling",
-        extension_evaluator=extension_evaluator,
+        sampling_evaluator=sampling_evaluator,
         sampler=object(),
         predict_fn=object(),
         sample_count=3,
@@ -92,15 +92,15 @@ class RunMultisolDispatchTest(absltest.TestCase):
         fallback_eval_fn=fallback_eval_fn,
     )
     self.assertFalse(called["fallback"])
-    self.assertTrue(called["extension"])
+    self.assertTrue(called["sampling"])
     self.assertEqual(out["score"], 0.9)
 
   def test_sampling_profile_can_enable_artifact_sink(self):
-    called = {"fallback": False, "extension": False}
+    called = {"fallback": False, "sampling": False}
 
-    def extension_evaluator(**kwargs):
-      called["extension"] = True
-      self.assertIs(kwargs["save_results_fn"], reporting.save_pickle_report)
+    def sampling_evaluator(**kwargs):
+      called["sampling"] = True
+      self.assertIs(kwargs["save_results_fn"], artifacts.save_pickle_report)
       return {"score": 0.9}
 
     def fallback_eval_fn(**kwargs):
@@ -108,10 +108,10 @@ class RunMultisolDispatchTest(absltest.TestCase):
       called["fallback"] = True
       return {"score": 0.1}
 
-    out = dispatch.evaluate_with_optional_extension(
+    out = pipeline.evaluate_with_optional_sampling(
         algorithm_name="dfs_multi",
         profile="sampling",
-        extension_evaluator=extension_evaluator,
+        sampling_evaluator=sampling_evaluator,
         sampler=object(),
         predict_fn=object(),
         sample_count=3,
@@ -122,17 +122,17 @@ class RunMultisolDispatchTest(absltest.TestCase):
         fallback_eval_fn=fallback_eval_fn,
     )
     self.assertFalse(called["fallback"])
-    self.assertTrue(called["extension"])
+    self.assertTrue(called["sampling"])
     self.assertEqual(out["score"], 0.9)
 
   def test_sampling_profile_uses_custom_report_sink(self):
-    called = {"fallback": False, "extension": False}
+    called = {"fallback": False, "sampling": False}
 
     def custom_sink(_result_dict, _filename):
       del _result_dict, _filename
 
-    def extension_evaluator(**kwargs):
-      called["extension"] = True
+    def sampling_evaluator(**kwargs):
+      called["sampling"] = True
       self.assertIs(kwargs["save_results_fn"], custom_sink)
       return {"score": 0.8}
 
@@ -141,10 +141,10 @@ class RunMultisolDispatchTest(absltest.TestCase):
       called["fallback"] = True
       return {"score": 0.1}
 
-    out = dispatch.evaluate_with_optional_extension(
+    out = pipeline.evaluate_with_optional_sampling(
         algorithm_name="dfs_multi",
         profile="sampling",
-        extension_evaluator=extension_evaluator,
+        sampling_evaluator=sampling_evaluator,
         sampler=object(),
         predict_fn=object(),
         sample_count=3,
@@ -156,14 +156,14 @@ class RunMultisolDispatchTest(absltest.TestCase):
         report_sink=custom_sink,
     )
     self.assertFalse(called["fallback"])
-    self.assertTrue(called["extension"])
+    self.assertTrue(called["sampling"])
     self.assertEqual(out["score"], 0.8)
 
-  def test_sampling_profile_filters_unsupported_extension_kwargs(self):
-    called = {"fallback": False, "extension": False}
+  def test_sampling_profile_filters_unsupported_sampling_kwargs(self):
+    called = {"fallback": False, "sampling": False}
     seen = {}
 
-    def extension_evaluator(
+    def sampling_evaluator(
         *,
         sampler,
         predict_fn,
@@ -177,7 +177,7 @@ class RunMultisolDispatchTest(absltest.TestCase):
       del sampler, predict_fn, sample_count, rng_key, extras, save_results_fn
       seen["filename"] = filename
       seen["NSE"] = NSE
-      called["extension"] = True
+      called["sampling"] = True
       return {"score": 0.7}
 
     def fallback_eval_fn(**kwargs):
@@ -185,10 +185,10 @@ class RunMultisolDispatchTest(absltest.TestCase):
       called["fallback"] = True
       return {"score": 0.1}
 
-    out = dispatch.evaluate_with_optional_extension(
+    out = pipeline.evaluate_with_optional_sampling(
         algorithm_name="dfs_multi",
         profile="sampling",
-        extension_evaluator=extension_evaluator,
+        sampling_evaluator=sampling_evaluator,
         sampler=object(),
         predict_fn=object(),
         sample_count=3,
@@ -197,30 +197,37 @@ class RunMultisolDispatchTest(absltest.TestCase):
         artifact_prefix="unused",
         save_artifacts=False,
         fallback_eval_fn=fallback_eval_fn,
-        extension_kwargs={"NSE": 17, "vd_flag": True},
+        sampling_kwargs={"NSE": 17, "vd_flag": True},
     )
     self.assertFalse(called["fallback"])
-    self.assertTrue(called["extension"])
+    self.assertTrue(called["sampling"])
     self.assertEqual(out["score"], 0.7)
     self.assertEqual(seen["NSE"], 17)
     self.assertEqual(seen["filename"], "unused_dfs_multi")
 
-  def test_registry_dispatch_uses_registered_extension(self):
-    called = {"fallback": False, "extension": False}
+  def test_registry_dispatch_uses_registered_sampling_evaluator(self):
+    called = {"fallback": False, "sampling": False}
     seen = {}
 
+    class _SolutionSpace:
+      batch_extractor = object()
+      validation_method = object()
+      extraction_methods = {"categorical": object()}
+      generator_sampling_source = "predictions"
+      include_source_nodes = True
+
     class _Extension:
-      def __init__(self, evaluator):
-        self.evaluator = evaluator
+      def __init__(self):
+        self.solution_space = _SolutionSpace()
 
     class _Registry:
       def get_extension(self, algorithm_name):
         if algorithm_name == "dfs_multi":
-          return _Extension(extension_evaluator)
+          return _Extension()
         return None
 
-    def extension_evaluator(**kwargs):
-      called["extension"] = True
+    def sampling_evaluator(**kwargs):
+      called["sampling"] = True
       seen["filename"] = kwargs["filename"]
       return {"score": 0.9}
 
@@ -229,10 +236,12 @@ class RunMultisolDispatchTest(absltest.TestCase):
       called["fallback"] = True
       return {"score": 0.1}
 
-    original_registry = dispatch._MULTISOL_REGISTRY
-    dispatch._MULTISOL_REGISTRY = _Registry()
+    original_registry = pipeline._MULTISOL_REGISTRY
+    original_builder = pipeline.build_definition_evaluator
+    pipeline._MULTISOL_REGISTRY = _Registry()
+    pipeline.build_definition_evaluator = lambda _: sampling_evaluator
     try:
-      out = dispatch.evaluate_with_registry(
+      out = pipeline.evaluate_with_sampling_registry(
           algorithm_name="dfs_multi",
           split="test",
           profile="sampling",
@@ -246,14 +255,15 @@ class RunMultisolDispatchTest(absltest.TestCase):
           fallback_eval_fn=fallback_eval_fn,
       )
     finally:
-      dispatch._MULTISOL_REGISTRY = original_registry
+      pipeline._MULTISOL_REGISTRY = original_registry
+      pipeline.build_definition_evaluator = original_builder
 
     self.assertFalse(called["fallback"])
-    self.assertTrue(called["extension"])
+    self.assertTrue(called["sampling"])
     self.assertEqual(seen["filename"], "sampling_eval_test_dfs_multi")
     self.assertEqual(out["score"], 0.9)
 
-  def test_registry_dispatch_falls_back_for_non_extension_algorithm(self):
+  def test_registry_dispatch_falls_back_for_non_multisol_algorithm(self):
     called = {"fallback": False}
     seen = {}
     fallback_kwargs = {}
@@ -272,10 +282,10 @@ class RunMultisolDispatchTest(absltest.TestCase):
       fallback_kwargs.update(kwargs)
       return {"score": 0.5}
 
-    original_registry = dispatch._MULTISOL_REGISTRY
-    dispatch._MULTISOL_REGISTRY = _Registry()
+    original_registry = pipeline._MULTISOL_REGISTRY
+    pipeline._MULTISOL_REGISTRY = _Registry()
     try:
-      out = dispatch.evaluate_with_registry(
+      out = pipeline.evaluate_with_sampling_registry(
           algorithm_name="bfs",
           split="val",
           profile="sampling",
@@ -289,7 +299,7 @@ class RunMultisolDispatchTest(absltest.TestCase):
           fallback_eval_fn=fallback_eval_fn,
       )
     finally:
-      dispatch._MULTISOL_REGISTRY = original_registry
+      pipeline._MULTISOL_REGISTRY = original_registry
 
     self.assertTrue(called["fallback"])
     self.assertEqual(seen["algorithm_name"], "bfs")
@@ -318,10 +328,10 @@ class RunMultisolDispatchTest(absltest.TestCase):
       called["fallback"] = True
       return {"score": 0.4}
 
-    original_registry = dispatch._MULTISOL_REGISTRY
-    dispatch._MULTISOL_REGISTRY = _Registry()
+    original_registry = pipeline._MULTISOL_REGISTRY
+    pipeline._MULTISOL_REGISTRY = _Registry()
     try:
-      out = dispatch.evaluate_with_registry(
+      out = pipeline.evaluate_with_sampling_registry(
           algorithm_name="dfs_multi",
           split="val",
           profile="default",
@@ -335,7 +345,7 @@ class RunMultisolDispatchTest(absltest.TestCase):
           fallback_eval_fn=fallback_eval_fn,
       )
     finally:
-      dispatch._MULTISOL_REGISTRY = original_registry
+      pipeline._MULTISOL_REGISTRY = original_registry
 
     self.assertTrue(called["fallback"])
     self.assertEqual(out["score"], 0.4)

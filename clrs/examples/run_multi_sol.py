@@ -32,10 +32,9 @@ import numpy as np
 import requests
 import tensorflow as tf
 
-from clrs._src.multi_sol.evaluation import dispatch as multisol_dispatch
-from clrs._src.multi_sol.evaluation import definition_evaluation
-from clrs._src.multi_sol.evaluation import reporting as multisol_reporting
-from clrs._src.multi_sol import catalog as multisol_catalog
+from clrs._src.multi_sol.evaluation import artifacts as multisol_artifacts
+from clrs._src.multi_sol.evaluation import pipeline as multisol_eval_pipeline
+from clrs._src.multi_sol.core import registry as multisol_registry
 
 
 flags.DEFINE_list('algorithms', ['bfs'], 'Which algorithms to run.')
@@ -530,44 +529,6 @@ def collect_and_eval(sampler, predict_fn, sample_count, rng_key, extras):
   return {k: unpack(v) for k, v in out.items()}
 
 
-def evaluate_with_catalog(
-    *,
-    algorithm_name: str,
-    split: str,
-    profile: str,
-    sampler,
-    predict_fn,
-    sample_count: int,
-    rng_key,
-    extras: Dict[str, Any],
-    artifact_prefix: str,
-    save_artifacts: bool,
-    fallback_eval_fn,
-    extension_kwargs: Dict[str, Any] | None = None,
-    report_sink=None,
-):
-  """Evaluate using the multi-solution catalog when available."""
-  extension_evaluator = None
-  if profile == 'sampling' and algorithm_name in multisol_catalog.MULTI_SOL_ALGS:
-    definition = multisol_catalog.MULTI_SOL_ALGS[algorithm_name]
-    extension_evaluator = definition_evaluation.evaluator_for_definition(definition)
-  return multisol_dispatch.evaluate_with_optional_extension(
-      algorithm_name=algorithm_name,
-      profile=profile,
-      extension_evaluator=extension_evaluator,
-      sampler=sampler,
-      predict_fn=predict_fn,
-      sample_count=sample_count,
-      rng_key=rng_key,
-      extras=extras,
-      artifact_prefix=f'{artifact_prefix}_{split}',
-      save_artifacts=save_artifacts,
-      fallback_eval_fn=fallback_eval_fn,
-      extension_kwargs=extension_kwargs,
-      report_sink=report_sink,
-  )
-
-
 def create_samplers(
     rng,
     train_lengths: List[int],
@@ -749,7 +710,7 @@ def _effective_validation_profile() -> str:
   return FLAGS.val_evaluation_profile
 
 
-def _extension_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
+def _sampling_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
   kwargs = {
       'vd_flag': FLAGS.validate_distributions,
       'NSE': FLAGS.NSE,
@@ -764,11 +725,20 @@ def _extension_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
   return kwargs
 
 
+def _sampling_evaluator_for_algo(algorithm_name: str, profile: str):
+  if profile != 'sampling':
+    return None
+  definition = multisol_registry.get_extension(algorithm_name)
+  if definition is None:
+    return None
+  return multisol_eval_pipeline.build_definition_evaluator(definition)
+
+
 def _sampling_report_sink(split: str, profile: str, run_dir: str):
   if split != 'test' or profile != 'sampling':
     return None
   return functools.partial(
-      multisol_reporting.save_csv_report,
+      multisol_artifacts.save_csv_report,
       output_dir=run_dir,
       timestamped=False,
   )
@@ -835,7 +805,7 @@ def _save_seed_summary(test_rows, run_dir: str) -> None:
   if not test_rows:
     return
 
-  multisol_reporting.save_csv_report(
+  multisol_artifacts.save_csv_report(
       test_rows,
       'seed-test-results',
       output_dir=run_dir,
@@ -863,7 +833,7 @@ def _save_seed_summary(test_rows, run_dir: str) -> None:
           'Std': float(np.std(values, ddof=1)) if len(values) > 1 else 0.0,
           'Num Seeds': len(values),
       })
-  multisol_reporting.save_csv_report(
+  multisol_artifacts.save_csv_report(
       summary_rows,
       'seed-test-summary',
       output_dir=run_dir,
@@ -1129,20 +1099,21 @@ def _run_single_seed(seed: int, run_dir: str):
 
         # Validation info.
         new_rng_key, rng_key = jax.random.split(rng_key)
-        val_stats = evaluate_with_catalog(
+        val_stats = multisol_eval_pipeline.evaluate_with_optional_sampling(
             algorithm_name=FLAGS.algorithms[algo_idx],
-            split='val',
             profile=validation_profile,
+            sampling_evaluator=_sampling_evaluator_for_algo(
+                FLAGS.algorithms[algo_idx], validation_profile),
             sampler=val_samplers[algo_idx],
             predict_fn=functools.partial(
                 eval_model.predict, algorithm_index=algo_idx),
             sample_count=val_sample_counts[algo_idx],
             rng_key=new_rng_key,
             extras=common_extras,
-            artifact_prefix=FLAGS.sampling_artifact_prefix,
+            artifact_prefix=f'{FLAGS.sampling_artifact_prefix}_val',
             save_artifacts=False,
             fallback_eval_fn=collect_and_eval,
-            extension_kwargs=_extension_eval_kwargs(split='val', run_dir=run_dir),
+            sampling_kwargs=_sampling_eval_kwargs(split='val', run_dir=run_dir),
             report_sink=_sampling_report_sink(
                 split='val', profile=validation_profile, run_dir=run_dir),
         )
@@ -1197,7 +1168,7 @@ def _run_single_seed(seed: int, run_dir: str):
     eval_model.restore_model('best.pkl', only_load_processor=False)
 
   if FLAGS.save_df and collect_results_df:
-    multisol_reporting.save_csv_report(
+    multisol_artifacts.save_csv_report(
         metric_rows,
         _default_results_df_filename(),
         output_dir=run_dir,
@@ -1217,19 +1188,20 @@ def _run_single_seed(seed: int, run_dir: str):
                      'algorithm': FLAGS.algorithms[algo_idx]}
 
     new_rng_key, rng_key = jax.random.split(rng_key)
-    test_stats = evaluate_with_catalog(
+    test_stats = multisol_eval_pipeline.evaluate_with_optional_sampling(
         algorithm_name=FLAGS.algorithms[algo_idx],
-        split='test',
         profile=effective_profile,
+        sampling_evaluator=_sampling_evaluator_for_algo(
+            FLAGS.algorithms[algo_idx], effective_profile),
         sampler=test_samplers[algo_idx],
         predict_fn=functools.partial(eval_model.predict, algorithm_index=algo_idx),
         sample_count=test_sample_counts[algo_idx],
         rng_key=new_rng_key,
         extras=common_extras,
-        artifact_prefix=FLAGS.sampling_artifact_prefix,
+        artifact_prefix=f'{FLAGS.sampling_artifact_prefix}_test',
         save_artifacts=FLAGS.save_sampling_artifacts,
         fallback_eval_fn=collect_and_eval,
-        extension_kwargs=_extension_eval_kwargs(split='test', run_dir=run_dir),
+        sampling_kwargs=_sampling_eval_kwargs(split='test', run_dir=run_dir),
         report_sink=_sampling_report_sink(
             split='test', profile=effective_profile, run_dir=run_dir),
     )

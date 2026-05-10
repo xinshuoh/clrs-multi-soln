@@ -3,8 +3,7 @@
 from clrs._src.specs import Location, Stage, Type
 from clrs._src.multi_sol.algorithms.mst_prim import extractors, generator, validator
 from clrs._src.multi_sol.core import definitions
-from clrs._src.multi_sol.evaluation import adapters
-from clrs._src.multi_sol.evaluation import definition_evaluation
+from clrs._src.multi_sol.algorithms.common import batch_extractors
 from clrs._src import samplers
 
 TRAINING_DISTRIBUTION = definitions.TrainingDistribution(
@@ -36,7 +35,7 @@ def _sample_randomized_prim_algorithm(adjacency, source_nodes, rng):
 
 
 SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
-    batch_extractor=adapters.extract_mst_prim_graph_and_source,
+    batch_extractor=batch_extractors.extract_mst_prim_graph_and_source,
     validation_method=validator.check_valid_mst_prim_tree,
     extraction_methods=(
         definitions.ExtractionMethod(
@@ -66,29 +65,12 @@ SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
 )
 
 
-def evaluate_mst_prim_multisol_batch(**kwargs):
-  return definition_evaluation.evaluate_definition(definition=DEFINITION, **kwargs)
-
-
-def algorithm_spec():
-  return SPEC
-
-
-def training_distribution():
-  return TRAINING_DISTRIBUTION
-
-
 DEFINITION = definitions.MultiSolAlgorithm(
     algorithm_name="mst_prim_multi",
     base_algorithm_name="mst_prim",
     spec=SPEC,
-    sampler_class=samplers.MSTPrimMultiSampler,
-    algorithm=generator.mst_prim_multi,
     generator=generator.mst_prim_multi,
-    evaluator=evaluate_mst_prim_multisol_batch,
-    extractors=extractors.EXTRACTORS,
-    validator=validator.check_valid_mst_prim_tree,
+    sampler_class=samplers.MSTPrimMultiSampler,
     training_distribution=TRAINING_DISTRIBUTION,
-    randomized_algorithm=RANDOMIZED_ALGORITHM,
     solution_space=SOLUTION_SPACE,
 )
