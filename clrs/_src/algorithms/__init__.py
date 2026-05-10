@@ -56,3 +56,10 @@ from clrs._src.algorithms.sorting import quicksort
 
 from clrs._src.algorithms.strings import naive_string_matcher
 from clrs._src.algorithms.strings import kmp_matcher
+
+from clrs._src.multi_sol.algorithms.bellman_ford.generator import (
+    bellman_ford_multi,
+)
+from clrs._src.multi_sol.algorithms.bfs.generator import bfs_multi
+from clrs._src.multi_sol.algorithms.dfs.generator import dfs_multi
+from clrs._src.multi_sol.algorithms.mst_prim.generator import mst_prim_multi

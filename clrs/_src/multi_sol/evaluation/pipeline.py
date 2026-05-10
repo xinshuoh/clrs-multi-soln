@@ -104,11 +104,6 @@ def evaluate_definition(
 ) -> Dict[str, Any]:
   """Evaluate a multi-solution algorithm from its definition object."""
   solution_space = definition.solution_space
-  if solution_space is None:
-    raise ValueError(
-        f"Algorithm definition '{definition.algorithm_name}' has no "
-        "solution-space definition."
-    )
   return evaluate_sampling_batch(
       sampler=sampler,
       predict_fn=predict_fn,
@@ -116,16 +111,15 @@ def evaluate_definition(
       rng_key=rng_key,
       extras=extras,
       batch_extractor=solution_space.batch_extractor,
-      validate_fn=solution_space.validation_method,
+      validate_fn=solution_space.validator,
       sampling_methods=_to_sampling_methods(solution_space.extraction_methods),
       save_results_fn=save_results_fn,
-      filename=filename or definition.algorithm_name,
+      filename=filename or definition.name,
       vd_flag=vd_flag,
       n_samples=NSE,
       output_dir=output_dir,
       curve_max_graphs=curve_max_graphs,
-      algorithm_source=_to_algorithm_source(
-          solution_space.generator_sampling_source),
+      algorithm_source=_to_algorithm_source(definition),
       include_source_nodes=solution_space.include_source_nodes,
   )
 
@@ -526,20 +520,25 @@ def _to_sampling_methods(extraction_methods):
   )
 
 
-def _to_algorithm_source(generator_sampling_source):
-  if generator_sampling_source is None:
+def _to_algorithm_source(definition):
+  algorithm_baseline = definition.solution_space.algorithm_baseline
+  symbolic_sampler = definition.training.symbolic_sampler
+  if algorithm_baseline is None or symbolic_sampler is None:
     return None
+  def _sample(batch, rng):
+    source_nodes = batch.source_nodes if symbolic_sampler.uses_source_node else None
+    return symbolic_sampler.sample_batch(batch.adjacency, source_nodes, rng)
   return AlgorithmSamplingSource(
-      generator_sampling_source.name,
-      generator_sampling_source.source_name,
-      generator_sampling_source.sample_fn,
+      algorithm_baseline.name,
+      algorithm_baseline.source_name,
+      _sample,
   )
 
 
 def _get_multisol_registry():
   global _MULTISOL_REGISTRY
   if _MULTISOL_REGISTRY is None:
-    from clrs._src.multi_sol.core import registry as multisol_registry
+    from clrs._src.multi_sol import registry as multisol_registry
     _MULTISOL_REGISTRY = multisol_registry
   return _MULTISOL_REGISTRY
 
@@ -551,7 +550,7 @@ def _resolve_sampling_evaluator(
 ) -> Callable[..., Dict[str, Any]] | None:
   if profile != "sampling":
     return None
-  extension = _get_multisol_registry().get_extension(algorithm_name)
+  extension = _get_multisol_registry().get(algorithm_name)
   if extension is None:
     return None
   return build_definition_evaluator(extension)

@@ -288,6 +288,22 @@ SPECS = types.MappingProxyType({
         's_last': (Stage.HINT, Location.NODE, Type.MASK_ONE),
         'time': (Stage.HINT, Location.GRAPH, Type.SCALAR)
     },
+    'dfs_multi': {
+        'pos': (Stage.INPUT, Location.NODE, Type.SCALAR),
+        'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
+        'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
+        'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER_DISTRIBUTION),
+        'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
+        'color': (Stage.HINT, Location.NODE, Type.CATEGORICAL),
+        'd': (Stage.HINT, Location.NODE, Type.SCALAR),
+        'f': (Stage.HINT, Location.NODE, Type.SCALAR),
+        's_prev': (Stage.HINT, Location.NODE, Type.POINTER),
+        's': (Stage.HINT, Location.NODE, Type.MASK_ONE),
+        'u': (Stage.HINT, Location.NODE, Type.MASK_ONE),
+        'v': (Stage.HINT, Location.NODE, Type.MASK_ONE),
+        's_last': (Stage.HINT, Location.NODE, Type.MASK_ONE),
+        'time': (Stage.HINT, Location.GRAPH, Type.SCALAR)
+    },
     'topological_sort': {
         'pos': (Stage.INPUT, Location.NODE, Type.SCALAR),
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
@@ -367,6 +383,15 @@ SPECS = types.MappingProxyType({
         'reach_h': (Stage.HINT, Location.NODE, Type.MASK),
         'pi_h': (Stage.HINT, Location.NODE, Type.POINTER)
     },
+    'bfs_multi': {
+        'pos': (Stage.INPUT, Location.NODE, Type.SCALAR),
+        's': (Stage.INPUT, Location.NODE, Type.MASK_ONE),
+        'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
+        'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
+        'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER_DISTRIBUTION),
+        'reach_h': (Stage.HINT, Location.NODE, Type.MASK),
+        'pi_h': (Stage.HINT, Location.NODE, Type.POINTER)
+    },
     'mst_kruskal': {
         'pos': (Stage.INPUT, Location.NODE, Type.SCALAR),
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
@@ -394,12 +419,34 @@ SPECS = types.MappingProxyType({
         'in_queue': (Stage.HINT, Location.NODE, Type.MASK),
         'u': (Stage.HINT, Location.NODE, Type.MASK_ONE)
     },
+    'mst_prim_multi': {
+        'pos': (Stage.INPUT, Location.NODE, Type.SCALAR),
+        's': (Stage.INPUT, Location.NODE, Type.MASK_ONE),
+        'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
+        'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
+        'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER_DISTRIBUTION),
+        'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
+        'key': (Stage.HINT, Location.NODE, Type.SCALAR),
+        'mark': (Stage.HINT, Location.NODE, Type.MASK),
+        'in_queue': (Stage.HINT, Location.NODE, Type.MASK),
+        'u': (Stage.HINT, Location.NODE, Type.MASK_ONE)
+    },
     'bellman_ford': {
         'pos': (Stage.INPUT, Location.NODE, Type.SCALAR),
         's': (Stage.INPUT, Location.NODE, Type.MASK_ONE),
         'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
         'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
         'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER),
+        'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
+        'd': (Stage.HINT, Location.NODE, Type.SCALAR),
+        'msk': (Stage.HINT, Location.NODE, Type.MASK)
+    },
+    'bellman_ford_multi': {
+        'pos': (Stage.INPUT, Location.NODE, Type.SCALAR),
+        's': (Stage.INPUT, Location.NODE, Type.MASK_ONE),
+        'A': (Stage.INPUT, Location.EDGE, Type.SCALAR),
+        'adj': (Stage.INPUT, Location.EDGE, Type.MASK),
+        'pi': (Stage.OUTPUT, Location.NODE, Type.POINTER_DISTRIBUTION),
         'pi_h': (Stage.HINT, Location.NODE, Type.POINTER),
         'd': (Stage.HINT, Location.NODE, Type.SCALAR),
         'msk': (Stage.HINT, Location.NODE, Type.MASK)

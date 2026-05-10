@@ -1,43 +1,21 @@
 """Definition for the BFS multi-solution algorithm."""
 
-from clrs._src.specs import Location, Stage, Type
 from clrs._src.multi_sol.algorithms.bfs import extractors, generator, validator
 from clrs._src.multi_sol.core import definitions
 from clrs._src.multi_sol.algorithms.common import batch_extractors
-from clrs._src import samplers
 
-TRAINING_DISTRIBUTION = definitions.TrainingDistribution(
+TRAINING = definitions.MultiSolTrainingConfig(
     num_solutions=20,
     output_name="pi",
-)
-
-RANDOMIZED_ALGORITHM = definitions.RandomizedAlgorithm(
-    sample_solution=generator.sample_solution,
-    uses_source_node=True,
-)
-
-SPEC = {
-    "pos": (Stage.INPUT, Location.NODE, Type.SCALAR),
-    "s": (Stage.INPUT, Location.NODE, Type.MASK_ONE),
-    "A": (Stage.INPUT, Location.EDGE, Type.SCALAR),
-    "adj": (Stage.INPUT, Location.EDGE, Type.MASK),
-    "pi": (
-        Stage.OUTPUT,
-        Location.NODE,
-        Type.POINTER_DISTRIBUTION,
+    symbolic_sampler=definitions.RandomizedAlgorithm(
+        sample_solution=generator.sample_solution,
+        uses_source_node=True,
     ),
-    "reach_h": (Stage.HINT, Location.NODE, Type.MASK),
-    "pi_h": (Stage.HINT, Location.NODE, Type.POINTER),
-}
-
-
-def _sample_randomized_bfs_algorithm(adjacency, source_nodes, rng):
-  return RANDOMIZED_ALGORITHM.sample_batch(adjacency, source_nodes, rng)
-
+)
 
 SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
     batch_extractor=batch_extractors.extract_bfs_graph_and_source,
-    validation_method=validator.check_valid_bfs_tree,
+    validator=validator.check_valid_bfs_tree,
     extraction_methods=(
         definitions.ExtractionMethod.same_sampler(
             "Categorical",
@@ -56,22 +34,16 @@ SOLUTION_SPACE = definitions.MultiSolSolutionSpace(
             extractors.extract_beam,
         ),
     ),
-    generator_sampling_source=definitions.GeneratorSamplingSource(
+    algorithm_baseline=definitions.AlgorithmBaseline(
         name="BFS",
-        source_name="Algorithm",
-        sample_fn=lambda batch, rng: _sample_randomized_bfs_algorithm(
-            batch.adjacency, batch.source_nodes, rng),
     ),
     include_source_nodes=True,
 )
 
 
 DEFINITION = definitions.MultiSolAlgorithm(
-    algorithm_name="bfs_multi",
-    base_algorithm_name="bfs",
-    spec=SPEC,
-    generator=generator.bfs_multi,
-    sampler_class=samplers.BfsMultiSampler,
-    training_distribution=TRAINING_DISTRIBUTION,
+    name="bfs_multi",
+    base_name="bfs",
+    training=TRAINING,
     solution_space=SOLUTION_SPACE,
 )

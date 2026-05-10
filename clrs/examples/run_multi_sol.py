@@ -34,7 +34,7 @@ import tensorflow as tf
 
 from clrs._src.multi_sol.evaluation import artifacts as multisol_artifacts
 from clrs._src.multi_sol.evaluation import pipeline as multisol_eval_pipeline
-from clrs._src.multi_sol.core import registry as multisol_registry
+from clrs._src.multi_sol import registry as multisol_registry
 
 
 flags.DEFINE_list('algorithms', ['bfs'], 'Which algorithms to run.')
@@ -728,7 +728,7 @@ def _sampling_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
 def _sampling_evaluator_for_algo(algorithm_name: str, profile: str):
   if profile != 'sampling':
     return None
-  definition = multisol_registry.get_extension(algorithm_name)
+  definition = multisol_registry.get(algorithm_name)
   if definition is None:
     return None
   return multisol_eval_pipeline.build_definition_evaluator(definition)

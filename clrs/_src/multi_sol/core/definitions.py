@@ -4,18 +4,13 @@ from __future__ import annotations
 
 import dataclasses
 import numpy as np
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple
+from typing import Any, Callable, Sequence, Tuple
 
-
-SpecFactory = Callable[[Dict[str, Dict[str, Any]]], Dict[str, Any]]
-Algorithm = Callable[..., Any]
-SpecProvider = Dict[str, Any] | SpecFactory
 BatchExtractor = Callable[[Any], Tuple[Any, Any]]
 ValidatorFn = Callable[[Any, object, int], bool]
 ValidateFn = ValidatorFn
 ExtractorFn = Callable[[Any, Any], Any]
 ExtractFn = ExtractorFn
-GeneratorSampleFn = Callable[[Any, Any], Any]
 RunSingleFn = Callable[..., Any]
 
 
@@ -41,20 +36,20 @@ class ExtractionMethod:
 
 
 @dataclasses.dataclass(frozen=True)
-class GeneratorSamplingSource:
-  """Symbolic generator source used as a solution-space comparator."""
+class AlgorithmBaseline:
+  """Display metadata for symbolic algorithm-baseline evaluation."""
 
   name: str
-  source_name: str
-  sample_fn: GeneratorSampleFn
+  source_name: str = "Algorithm"
 
 
 @dataclasses.dataclass(frozen=True)
-class TrainingDistribution:
+class MultiSolTrainingConfig:
   """Configuration for empirical multi-solution training targets."""
 
   num_solutions: int = 20
   output_name: str = "pi"
+  symbolic_sampler: "RandomizedAlgorithm | None" = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -66,8 +61,7 @@ class RandomizedAlgorithm:
 
   def sample_one(self, adjacency, rng, source_node=None, deterministic=False):
     if self.uses_source_node:
-      return self.sample_solution(
-          adjacency, int(source_node), rng, deterministic=deterministic)
+      return self.sample_solution(adjacency, int(source_node), rng, deterministic=deterministic)
     del source_node
     return self.sample_solution(adjacency, rng, deterministic=deterministic)
 
@@ -78,14 +72,10 @@ class RandomizedAlgorithm:
               np.asarray(graph),
               rng,
               source_node=int(source),
-          )
-          for graph, source in zip(adjacency, source_nodes)
+          ) for graph, source in zip(adjacency, source_nodes)
       ]
     del source_nodes
-    return [
-        self.sample_one(np.asarray(graph), rng)
-        for graph in adjacency
-    ]
+    return [self.sample_one(np.asarray(graph), rng) for graph in adjacency]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -93,21 +83,17 @@ class MultiSolSolutionSpace:
   """Solution-space operations for one multi-solution algorithm."""
 
   batch_extractor: BatchExtractor
-  validation_method: ValidateFn
+  validator: ValidateFn
   extraction_methods: Sequence[ExtractionMethod]
-  generator_sampling_source: GeneratorSamplingSource | None = None
+  algorithm_baseline: AlgorithmBaseline | None = None
   include_source_nodes: bool = False
 
 
 @dataclasses.dataclass(frozen=True)
 class MultiSolAlgorithm:
-  """Single source of truth for one multi-solution algorithm."""
+  """Metadata for one multi-solution algorithm."""
 
-  algorithm_name: str
-  base_algorithm_name: str
-  spec: SpecProvider
-  generator: Algorithm
-  sampler_class: type
-  training_distribution: TrainingDistribution = dataclasses.field(
-      default_factory=TrainingDistribution)
-  solution_space: MultiSolSolutionSpace | None = None
+  name: str
+  base_name: str
+  solution_space: MultiSolSolutionSpace
+  training: MultiSolTrainingConfig = dataclasses.field(default_factory=MultiSolTrainingConfig)

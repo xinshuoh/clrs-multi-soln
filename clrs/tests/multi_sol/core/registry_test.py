@@ -1,14 +1,12 @@
-"""Tests for multi-solution extension registry overlays."""
+"""Tests for multi-solution metadata registry."""
 
 import pathlib
 
 from absl.testing import absltest
 
+from clrs._src import algorithms
 from clrs._src import samplers
 from clrs._src import specs
-from clrs._src.multi_sol.algorithms.bellman_ford import generator as bf_generator
-from clrs._src.multi_sol.algorithms.bfs import generator as bfs_generator
-from clrs._src.multi_sol.algorithms.dfs import generator as dfs_generator
 from clrs._src.multi_sol.evaluation import pipeline
 from clrs._src.multi_sol.core import registry
 
@@ -16,21 +14,16 @@ from clrs._src.multi_sol.core import registry
 class MultiSolRegistryTest(absltest.TestCase):
 
   def test_builtin_extensions_registered(self):
-    extensions = registry.list_extensions()
+    extensions = registry.names()
     self.assertIn("dfs_multi", extensions)
     self.assertIn("bfs_multi", extensions)
     self.assertIn("bellman_ford_multi", extensions)
 
-  def test_overlay_specs_have_pointer_distribution_pi(self):
-    resolved_specs = registry.resolve_specs(specs.SPECS)
-    self.assertEqual(resolved_specs["dfs_multi"]["pi"][2], specs.Type.POINTER_DISTRIBUTION)
-    self.assertEqual(resolved_specs["bfs_multi"]["pi"][2], specs.Type.POINTER_DISTRIBUTION)
-    self.assertEqual(resolved_specs["bellman_ford_multi"]["pi"][2], specs.Type.POINTER_DISTRIBUTION)
-
-  def test_core_specs_remain_baseline_only(self):
+  def test_core_specs_include_multisol_entries(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      self.assertNotIn(name, specs.SPECS)
-      self.assertNotIn(name, specs.CLRS_30_ALGS)
+      self.assertIn(name, specs.SPECS)
+      self.assertEqual(
+          specs.SPECS[name]["pi"][2], specs.Type.POINTER_DISTRIBUTION)
 
   def test_core_type_handling_does_not_import_multisol_policies(self):
     source_root = pathlib.Path(__file__).resolve().parents[3] / "_src"
@@ -40,89 +33,49 @@ class MultiSolRegistryTest(absltest.TestCase):
         self.assertNotIn("multi_sol.training", source)
         self.assertNotIn("multi_sol.evaluation.output_types", source)
 
-  def test_extension_algorithms_include_multisol(self):
-    extended = registry.get_extension_algorithms(specs.CLRS_30_ALGS)
+  def test_multisol_samplers_are_registered_directly(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      self.assertIn(name, extended)
+      self.assertIn(name, samplers.SAMPLERS)
+      self.assertEqual(samplers.SAMPLERS[name].__module__, "clrs._src.samplers")
 
-  def test_builtin_extensions_expose_samplers(self):
+  def test_multisol_generators_are_exposed_in_algorithms_namespace(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get_extension(name)
-      self.assertIsNotNone(extension)
-      self.assertIsNotNone(extension.sampler_class)
-
-  def test_builtin_extensions_expose_generators(self):
-    for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get_extension(name)
-      self.assertIsNotNone(extension)
-      self.assertIsNotNone(extension.generator)
-
-  def test_builtin_extensions_expose_specs(self):
-    for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get_extension(name)
-      self.assertIsNotNone(extension)
-      self.assertIsNotNone(extension.spec)
-
-  def test_multisol_samplers_are_injected_from_multisol_module(self):
-    for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get_extension(name)
-      self.assertIsNotNone(extension)
-      sampler_class = extension.sampler_class
-      self.assertEqual(sampler_class.__module__, "clrs._src.samplers")
-      self.assertIs(samplers.SAMPLERS[name], sampler_class)
-
-  def test_multisol_generators_are_injected_from_multisol_module(self):
-    expected_algorithms = {
-        "dfs_multi": dfs_generator.dfs_multi,
-        "bfs_multi": bfs_generator.bfs_multi,
-        "bellman_ford_multi": bf_generator.bellman_ford_multi,
-    }
-    for name, expected_algorithm in expected_algorithms.items():
-      extension = registry.get_extension(name)
-      self.assertIsNotNone(extension)
-      generator_fn = extension.generator
+      generator_fn = getattr(algorithms, name)
       self.assertIn(".generator", generator_fn.__module__)
-      self.assertIs(generator_fn, expected_algorithm)
 
-  def test_build_sampler_uses_injected_multisol_sampler_classes(self):
-    expected_algorithms = {
-        "dfs_multi": dfs_generator.dfs_multi,
-        "bfs_multi": bfs_generator.bfs_multi,
-        "bellman_ford_multi": bf_generator.bellman_ford_multi,
-    }
-    for name, expected_algorithm in expected_algorithms.items():
-      sampler, _ = samplers.build_sampler(name, num_samples=1, length=4, seed=0)
-      self.assertEqual(type(sampler).__module__, "clrs._src.samplers")
-      self.assertIs(sampler._algorithm, expected_algorithm)  # pylint: disable=protected-access
-
-  def test_builtin_extensions_use_generic_sampling_evaluator(self):
+  def test_build_sampler_uses_algorithms_namespace(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get_extension(name)
-      self.assertIsNotNone(extension)
-      self.assertIsNotNone(pipeline.build_definition_evaluator(extension))
+      sampler, _ = samplers.build_sampler(name, num_samples=1, length=4, seed=0)
+      self.assertIs(sampler._algorithm, getattr(algorithms, name))  # pylint: disable=protected-access
 
   def test_builtin_extensions_expose_solution_spaces(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get_extension(name)
+      extension = registry.get(name)
       self.assertIsNotNone(extension)
-      self.assertIsNotNone(extension.solution_space)
+      self.assertEqual(extension.name, name)
       self.assertIsNotNone(extension.solution_space.batch_extractor)
-      self.assertIsNotNone(extension.solution_space.validation_method)
+      self.assertIsNotNone(extension.solution_space.validator)
       self.assertNotEmpty(extension.solution_space.extraction_methods)
 
-  def test_builtin_extensions_expose_training_distributions(self):
+  def test_builtin_extensions_expose_training_config(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get_extension(name)
+      extension = registry.get(name)
       self.assertIsNotNone(extension)
-      self.assertEqual(extension.training_distribution.num_solutions, 20)
-      self.assertEqual(extension.training_distribution.output_name, "pi")
+      self.assertEqual(extension.training.num_solutions, 20)
+      self.assertEqual(extension.training.output_name, "pi")
+      self.assertIsNotNone(extension.training.symbolic_sampler)
 
-  def test_builtin_extensions_can_sample_from_algorithm_source(self):
+  def test_builtin_extensions_expose_algorithm_baselines(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get_extension(name)
+      extension = registry.get(name)
       self.assertIsNotNone(extension)
-      self.assertIsNotNone(extension.solution_space)
-      self.assertIsNotNone(extension.solution_space.generator_sampling_source)
+      self.assertIsNotNone(extension.solution_space.algorithm_baseline)
+
+  def test_builtin_extensions_use_generic_sampling_evaluator(self):
+    for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
+      extension = registry.get(name)
+      self.assertIsNotNone(extension)
+      self.assertIsNotNone(pipeline.build_definition_evaluator(extension))
 
 
 if __name__ == "__main__":

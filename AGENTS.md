@@ -3,8 +3,6 @@
 ## Project Structure & Module Organization
 Core library code lives in `clrs/`, with most implementation details under `clrs/_src/` (algorithms, samplers, models, and the multi-solution framework in `clrs/_src/multi_sol/`).  
 Entry points for training/evaluation are in `clrs/examples/`, especially `clrs/examples/run.py`.  
-Tests are colocated with code as `*_test.py` files (for example `clrs/_src/samplers_test.py`, `clrs/_src/multi_sol/core/registry_test.py`).  
-Generated artifacts should go in `results/<timestamp>/`; avoid mixing experiment outputs into source directories.
 
 ## Build, Test, and Development Commands
 Run commands from the repository root.

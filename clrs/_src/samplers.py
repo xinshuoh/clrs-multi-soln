@@ -24,7 +24,6 @@ from typing import Any, Callable, List, Optional, Tuple
 from absl import logging
 
 from clrs._src import algorithms
-from clrs._src.multi_sol.core import registry as multisol_registry
 from clrs._src import probing
 from clrs._src import specs
 import jax
@@ -289,15 +288,10 @@ def build_sampler(
 ) -> Tuple[Sampler, specs.Spec]:
   """Builds a sampler. See `Sampler` documentation."""
 
-  resolved_specs = multisol_registry.resolve_specs(specs.SPECS)
-  if name not in resolved_specs or name not in SAMPLERS:
+  if name not in specs.SPECS or name not in SAMPLERS:
     raise NotImplementedError(f'No implementation of algorithm {name}.')
-  spec = resolved_specs[name]
-  extension = multisol_registry.get_extension(name)
-  if extension is not None:
-    algorithm = extension.generator
-  else:
-    algorithm = getattr(algorithms, name)
+  spec = specs.SPECS[name]
+  algorithm = getattr(algorithms, name)
   sampler_class = SAMPLERS[name]
   # Ignore kwargs not accepted by the sampler.
   sampler_args = inspect.signature(sampler_class._sample_data).parameters  # pylint:disable=protected-access
@@ -763,12 +757,6 @@ SAMPLERS = {
     'graham_scan': ConvexHullSampler,
     'jarvis_march': ConvexHullSampler,
 }
-
-for _extension_name in multisol_registry.list_extensions():
-  _extension = multisol_registry.get_extension(_extension_name)
-  if _extension and _extension.sampler_class is not None:
-    SAMPLERS[_extension_name] = _extension.sampler_class
-
 
 def _batch_io(traj_io: Trajectories) -> Trajectory:
   """Batches a trajectory of input/output samples along the time axis per probe.

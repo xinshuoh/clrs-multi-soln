@@ -211,9 +211,9 @@ class RunMultisolDispatchTest(absltest.TestCase):
 
     class _SolutionSpace:
       batch_extractor = object()
-      validation_method = object()
+      validator = object()
       extraction_methods = {"categorical": object()}
-      generator_sampling_source = "predictions"
+      algorithm_baseline = "predictions"
       include_source_nodes = True
 
     class _Extension:
@@ -221,7 +221,7 @@ class RunMultisolDispatchTest(absltest.TestCase):
         self.solution_space = _SolutionSpace()
 
     class _Registry:
-      def get_extension(self, algorithm_name):
+      def get(self, algorithm_name):
         if algorithm_name == "dfs_multi":
           return _Extension()
         return None
@@ -269,7 +269,7 @@ class RunMultisolDispatchTest(absltest.TestCase):
     fallback_kwargs = {}
 
     class _Registry:
-      def get_extension(self, algorithm_name):
+      def get(self, algorithm_name):
         seen["algorithm_name"] = algorithm_name
         return None
 
@@ -318,7 +318,7 @@ class RunMultisolDispatchTest(absltest.TestCase):
     called = {"fallback": False}
 
     class _Registry:
-      def get_extension(self, algorithm_name):
+      def get(self, algorithm_name):
         raise AssertionError(
             f"Registry lookup should not run for default profile: {algorithm_name}"
         )

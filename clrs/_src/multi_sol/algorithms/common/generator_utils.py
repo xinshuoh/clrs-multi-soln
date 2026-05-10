@@ -9,7 +9,7 @@ import numpy as np
 from clrs._src import probing
 from clrs._src import specs
 from clrs._src.multi_sol.core import definitions
-from clrs._src.multi_sol.core import registry as multisol_registry
+from clrs._src.multi_sol import registry as multisol_registry
 
 
 SingleExecution = Callable[
@@ -19,14 +19,14 @@ SingleExecution = Callable[
 
 
 def resolve_multisol_spec(algorithm_name: str) -> specs.Spec:
-  return multisol_registry.resolve_specs(specs.SPECS)[algorithm_name]
+  return specs.SPECS[algorithm_name]
 
 
 def generate_parent_distribution_target(
     *,
     algorithm_name: str | None = None,
     algorithm_spec: specs.Spec | None = None,
-    training_distribution: definitions.TrainingDistribution | None = None,
+    training_distribution: definitions.MultiSolTrainingConfig | None = None,
     num_nodes: int,
     seed: int,
     deterministic: bool,
@@ -60,14 +60,14 @@ def generate_parent_distribution_target(
 def _resolve_training_distribution(
     algorithm_name: str | None,
     num_solutions: int | None,
-) -> definitions.TrainingDistribution:
+) -> definitions.MultiSolTrainingConfig:
   if num_solutions is not None:
-    return definitions.TrainingDistribution(num_solutions=num_solutions)
+    return definitions.MultiSolTrainingConfig(num_solutions=num_solutions)
   if algorithm_name is not None:
-    extension = multisol_registry.get_extension(algorithm_name)
+    extension = multisol_registry.get(algorithm_name)
     if extension is not None:
-      return extension.training_distribution
-  return definitions.TrainingDistribution()
+      return extension.training
+  return definitions.MultiSolTrainingConfig()
 
 
 

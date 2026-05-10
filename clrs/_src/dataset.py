@@ -29,16 +29,6 @@ import tensorflow as tf
 import tensorflow_datasets as tfds
 
 
-def _get_resolved_specs():
-  from clrs._src.multi_sol.core import registry as multisol_registry
-  return multisol_registry.resolve_specs(specs.SPECS)
-
-
-def _get_dataset_algorithms():
-  from clrs._src.multi_sol.core import registry as multisol_registry
-  return multisol_registry.get_extension_algorithms(specs.CLRS_30_ALGS)
-
-
 def _correct_axis_filtering(tensor, index, name):
   if 'hint_' in name:
     return tensor[:, index]
@@ -53,14 +43,12 @@ class CLRSConfig(tfds.core.BuilderConfig):
 
 
 DEFAULT_BUILDER_CONFIGS = []
-DEFAULT_ALGO_SETTINGS = {'num_samples_multiplier': 1}
 
 
 def _build_default_builder_configs():
   for split in ['train', 'val', 'test']:
-    for alg in _get_dataset_algorithms():
-      DEFAULT_BUILDER_CONFIGS.append(
-          CLRSConfig(name=f'{alg}_{split}', split=split))
+    for alg in specs.CLRS_30_ALGS:
+      DEFAULT_BUILDER_CONFIGS.append(CLRSConfig(name=f'{alg}_{split}', split=split))
 
 
 _build_default_builder_configs()
@@ -84,9 +72,7 @@ class CLRSDataset(tfds.core.GeneratorBasedBuilder):
     if self._builder_config.split != 'train':  # pytype: disable=attribute-error  # always-use-return-annotations
       # Generate more samples for those algorithms in which the number of
       # signals is small.
-      settings = specs.CLRS_30_ALGS_SETTINGS.get(
-          algorithm_name, DEFAULT_ALGO_SETTINGS)
-      num_samples *= settings['num_samples_multiplier']
+      num_samples *= specs.CLRS_30_ALGS_SETTINGS[algorithm_name]['num_samples_multiplier']
     return num_samples
 
   def _create_data(self, single_sample):
@@ -104,8 +90,7 @@ class CLRSDataset(tfds.core.GeneratorBasedBuilder):
     # guarantee that this key is unused.
     data['lengths'] = sampled_dataset.features.lengths
     data.update({'output_' + t.name: t.data for t in sampled_dataset.outputs})
-    data.update({
-        'hint_' + t.name: t.data for t in sampled_dataset.features.hints})
+    data.update({'hint_' + t.name: t.data for t in sampled_dataset.features.hints})
     self._instantiated_dataset = data
 
   def _info(self) -> tfds.core.DatasetInfo:
@@ -114,15 +99,15 @@ class CLRSDataset(tfds.core.GeneratorBasedBuilder):
       info.read_from_directory(self.data_dir)
       return info
 
-    if (self._instantiated_dataset_name != self._builder_config.name
-        or self._instantiated_dataset_split != self._builder_config.split):  # pytype: disable=attribute-error  # always-use-return-annotations
+    if (self._instantiated_dataset_name != self._builder_config.name or
+        self._instantiated_dataset_split != self._builder_config.split):  # pytype: disable=attribute-error  # always-use-return-annotations
       self._create_data(single_sample=True)
 
-    data = {k: _correct_axis_filtering(v, 0, k)
-            for k, v in self._instantiated_dataset.items()}
+    data = {k: _correct_axis_filtering(v, 0, k) for k, v in self._instantiated_dataset.items()}
     data_info = {
-        k: tfds.features.Tensor(shape=v.shape, dtype=tf.dtypes.as_dtype(
-            v.dtype)) for k, v in data.items()}
+        k: tfds.features.Tensor(shape=v.shape, dtype=tf.dtypes.as_dtype(v.dtype))
+        for k, v in data.items()
+    }
     return tfds.core.DatasetInfo(
         builder=self,
         features=tfds.features.FeaturesDict(data_info),
@@ -130,8 +115,8 @@ class CLRSDataset(tfds.core.GeneratorBasedBuilder):
 
   def _split_generators(self, dl_manager: tfds.download.DownloadManager):
     """Download the data and define splits."""
-    if (self._instantiated_dataset_name != self._builder_config.name
-        or self._instantiated_dataset_split != self._builder_config.split):  # pytype: disable=attribute-error  # always-use-return-annotations
+    if (self._instantiated_dataset_name != self._builder_config.name or
+        self._instantiated_dataset_split != self._builder_config.split):  # pytype: disable=attribute-error  # always-use-return-annotations
       self._create_data(single_sample=False)
       self._instantiated_dataset_name = self._builder_config.name
       self._instantiated_dataset_split = self._builder_config.split  # pytype: disable=attribute-error  # always-use-return-annotations
@@ -141,8 +126,7 @@ class CLRSDataset(tfds.core.GeneratorBasedBuilder):
     """Generator of examples for each split."""
     algorithm_name = '_'.join(self._builder_config.name.split('_')[:-1])
     for i in range(self._num_samples(algorithm_name)):
-      data = {k: _correct_axis_filtering(v, i, k)
-              for k, v in self._instantiated_dataset.items()}
+      data = {k: _correct_axis_filtering(v, i, k) for k, v in self._instantiated_dataset.items()}
       yield str(i), data
 
 
@@ -171,8 +155,7 @@ def _preprocess(data_point, algorithm=None):
       continue
     data_point_name = name.split('_')
     name = '_'.join(data_point_name[1:])
-    resolved_specs = _get_resolved_specs()
-    (stage, location, dp_type) = resolved_specs[algorithm][name]
+    (stage, location, dp_type) = spec.SPECS[algorithm][name]
     assert stage == data_point_name[0]
     if stage == specs.Stage.HINT:
       data = tf.experimental.numpy.swapaxes(data, 0, 1)
@@ -183,19 +166,16 @@ def _preprocess(data_point, algorithm=None):
       outputs.append(dp)
     else:
       hints.append(dp)
-  return samplers.Feedback(
-      samplers.Features(tuple(inputs), tuple(hints), lengths), tuple(outputs))
+  return samplers.Feedback(samplers.Features(tuple(inputs), tuple(hints), lengths), tuple(outputs))
 
 
 def create_dataset(folder, algorithm, split, batch_size):
-  dataset = tfds.load(f'clrs_dataset/{algorithm}_{split}',
-                      data_dir=folder, split=split)
+  dataset = tfds.load(f'clrs_dataset/{algorithm}_{split}', data_dir=folder, split=split)
   num_samples = len(dataset)  # Must be done here for correct size
   dataset = dataset.repeat()
   dataset = dataset.batch(batch_size)
-  return (dataset.map(lambda d: _preprocess(d, algorithm=algorithm)),
-          num_samples,
-          _get_resolved_specs()[algorithm])
+  return (dataset.map(lambda d: _preprocess(d, algorithm=algorithm)), num_samples,
+          specs.SPECS[algorithm])
 
 
 def _copy_hint(source, dest, i, start_source, start_dest, to_add):
@@ -205,15 +185,14 @@ def _copy_hint(source, dest, i, start_source, start_dest, to_add):
   assert start_dest + to_add <= dest.shape[0]
   assert start_source < source.shape[0]
   assert start_source + to_add <= source.shape[0]
-  dest[start_dest:start_dest+to_add, i] = source[
-      start_source:start_source+to_add, i]
+  dest[start_dest:start_dest + to_add, i] = source[start_source:start_source + to_add, i]
   return dest
 
 
 def _copy_io(source, dest, i, start_dest, to_add):
   """Copy from an input or output to an input or output chunk."""
   assert np.all(dest[start_dest:, i:] == 0)
-  dest[start_dest:start_dest+to_add, i] = source[i]
+  dest[start_dest:start_dest + to_add, i] = source[i]
   return dest
 
 
@@ -249,10 +228,10 @@ def chunkify(dataset: Iterator[samplers.Feedback], chunk_length: int):
     no time dimension, here they do; the input and output tensors are simply
     repeated along each sample's time length.
   """
+
   def _get_batch():
     d = next(dataset)
-    return (d.features.inputs, d.features.hints, d.outputs,
-            d.features.lengths.astype(int))
+    return (d.features.inputs, d.features.hints, d.outputs, d.features.lengths.astype(int))
 
   inputs, hints, outputs, lengths = _get_batch()
   for inp in inputs:
@@ -298,13 +277,14 @@ def chunkify(dataset: Iterator[samplers.Feedback], chunk_length: int):
         if to_add:
           start = lengths[idx][i] - left[idx][i]
           assert start >= 0
-          f_io = functools.partial(_copy_io, i=i, start_dest=total,
-                                   to_add=to_add)
+          f_io = functools.partial(_copy_io, i=i, start_dest=total, to_add=to_add)
           chunk_inputs = jax.tree_util.tree_map(f_io, inputs[idx], chunk_inputs)
-          chunk_outputs = jax.tree_util.tree_map(f_io, outputs[idx],
-                                                 chunk_outputs)
-          f_hint = functools.partial(_copy_hint, i=i, start_source=start,
-                                     start_dest=total, to_add=to_add)
+          chunk_outputs = jax.tree_util.tree_map(f_io, outputs[idx], chunk_outputs)
+          f_hint = functools.partial(_copy_hint,
+                                     i=i,
+                                     start_source=start,
+                                     start_dest=total,
+                                     to_add=to_add)
           chunk_hints = jax.tree_util.tree_map(f_hint, hints[idx], chunk_hints)
           if start == 0:
             start_mark[total, i] = 1
@@ -324,16 +304,13 @@ def chunkify(dataset: Iterator[samplers.Feedback], chunk_length: int):
       lengths.pop(0)
 
     yield samplers.Feedback(
-        samplers.FeaturesChunked(chunk_inputs, chunk_hints,
-                                 start_mark, end_mark),
-        chunk_outputs)
+        samplers.FeaturesChunked(chunk_inputs, chunk_hints, start_mark, end_mark), chunk_outputs)
 
 
 def create_chunked_dataset(folder, algorithm, split, batch_size, chunk_length):
-  dataset = tfds.load(f'clrs_dataset/{algorithm}_{split}',
-                      data_dir=folder, split=split)
+  dataset = tfds.load(f'clrs_dataset/{algorithm}_{split}', data_dir=folder, split=split)
   dataset = dataset.repeat()
   dataset = dataset.batch(batch_size)
   dataset = dataset.map(lambda d: _preprocess(d, algorithm=algorithm))
   dataset = dataset.as_numpy_iterator()
-  return chunkify(dataset, chunk_length), _get_resolved_specs()[algorithm]
+  return chunkify(dataset, chunk_length), specs.SPECS[algorithm]
