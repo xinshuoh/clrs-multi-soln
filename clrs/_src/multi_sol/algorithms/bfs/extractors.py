@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from clrs._src.multi_sol.algorithms.common import extractor_utils
+from clrs._src.multi_sol.interfaces import Extractor
 
 
 def extract_categorical(outs_or_preds, _batch):
@@ -75,13 +76,41 @@ def _prim_like_sampler(prob_matrix, source):
 
 
 def extract_beam(outs_or_preds, batch, beam_width: int = 3):
-  """Sample BFS trees using heuristic beam search over processed-set states."""
+  """Sample BFS trees using stochastic beam search over processed-set states."""
   prob_matrix_list = extractor_utils.extract_prob_matrices(outs_or_preds)
   source_nodes = extractor_utils.as_index_list(batch.source_nodes, len(prob_matrix_list))
   trees = []
   for i, prob_matrix in enumerate(prob_matrix_list):
     trees.append(_bfs_beam_sampler(prob_matrix, int(source_nodes[i]), beam_width))
   return trees
+
+def _sample_parent_candidates(prob_matrix, node, candidate_parents, count):
+  """Sample unique parent candidates from predicted mass over `candidate_parents`."""
+  candidate_parents = list(candidate_parents)
+  if count <= 0 or not candidate_parents:
+    return []
+
+  parent_probs = np.asarray(
+      [prob_matrix[node, parent] for parent in candidate_parents],
+      dtype=np.float64,
+  )
+  parent_probs = np.where(np.isfinite(parent_probs), parent_probs, 0.0)
+  parent_probs = np.maximum(parent_probs, 0.0)
+  sample_count = min(count, len(candidate_parents))
+  positive = parent_probs > 0.0
+
+  if np.any(positive):
+    positive_ixs = np.flatnonzero(positive)
+    sample_count = min(sample_count, len(positive_ixs))
+    probs = parent_probs[positive_ixs] / np.sum(parent_probs[positive_ixs])
+    sampled_ixs = np.random.choice(
+        positive_ixs, size=sample_count, replace=False, p=probs)
+  else:
+    sampled_ixs = np.random.choice(
+        len(candidate_parents), size=sample_count, replace=False)
+
+  return [candidate_parents[int(ix)] for ix in np.atleast_1d(sampled_ixs)]
+
 
 def _bfs_beam_sampler(prob_matrix, source, beam_width):
   num_nodes = prob_matrix.shape[0]
@@ -110,13 +139,16 @@ def _bfs_beam_sampler(prob_matrix, source, beam_width):
       if best_v == -1:
         best_v = list(remaining)[0]
 
-      for u in list(processed):
+      sampled_parents = _sample_parent_candidates(
+          prob_matrix, best_v, list(processed), beam_width)
+      for u in sampled_parents:
         p_val = prob_matrix[best_v, u]
-        if p_val > 1e-9:
+        if p_val > 0.0:
           new_log_prob = curr_log_prob + np.log(p_val)
         else:
-          new_log_prob = curr_log_prob - 1e9
+          new_log_prob = -np.inf
         new_pi = pi.copy()
+        new_pi[source] = source
         new_pi[best_v] = u
         new_processed = processed.copy()
         new_processed.add(best_v)
@@ -129,12 +161,13 @@ def _bfs_beam_sampler(prob_matrix, source, beam_width):
     candidates.sort(key=lambda x: x["log_prob"], reverse=True)
     beam = candidates[:beam_width]
 
-  return beam[0]["pi"]
+  best_pi = beam[0]["pi"].copy()
+  best_pi[source] = source
+  return best_pi
 
-EXTRACTORS = {
-    "Categorical": extract_categorical,
-    "Random": extract_random,
-    "Prim": extract_prim,
-    "Beam": extract_beam,
-}
-
+EXTRACTORS = (
+    Extractor("Categorical", extract_categorical, extract_categorical),
+    Extractor("Random", extract_random, extract_random),
+    Extractor("Prim", extract_prim, extract_prim),
+    Extractor("Beam", extract_beam, extract_beam),
+)

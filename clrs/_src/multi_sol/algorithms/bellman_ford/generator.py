@@ -16,7 +16,13 @@ _Out = Tuple[_Array, probing.ProbesDict]
 
 
 def bellman_ford_multi(
-    A: _Array, s: int, seed: int, deterministic: bool = False) -> _Out:
+    A: _Array,
+    s: int,
+    seed: int,
+    deterministic: bool = False,
+    num_solutions: int = 20,
+    output_name: str = "pi",
+) -> _Out:
   """Multiple-solution Bellman-Ford target generation."""
   chex.assert_rank(A, 2)
   return generator_utils.generate_parent_distribution_target(
@@ -24,6 +30,8 @@ def bellman_ford_multi(
       num_nodes=A.shape[0],
       seed=seed,
       deterministic=deterministic,
+      num_solutions=num_solutions,
+      output_name=output_name,
       run_single=lambda rng, algorithm_spec, deterministic: (
           _bellman_ford_execution(A, s, rng, algorithm_spec, deterministic)),
   )

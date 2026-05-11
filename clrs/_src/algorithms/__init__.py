@@ -57,9 +57,16 @@ from clrs._src.algorithms.sorting import quicksort
 from clrs._src.algorithms.strings import naive_string_matcher
 from clrs._src.algorithms.strings import kmp_matcher
 
-from clrs._src.multi_sol.algorithms.bellman_ford.generator import (
-    bellman_ford_multi,
+from clrs._src.multi_sol.algorithms.bellman_ford.definition import (
+    ALGORITHM as _BF_MULTI,
 )
-from clrs._src.multi_sol.algorithms.bfs.generator import bfs_multi
-from clrs._src.multi_sol.algorithms.dfs.generator import dfs_multi
-from clrs._src.multi_sol.algorithms.mst_prim.generator import mst_prim_multi
+from clrs._src.multi_sol.algorithms.bfs.definition import ALGORITHM as _BFS_MULTI
+from clrs._src.multi_sol.algorithms.dfs.definition import ALGORITHM as _DFS_MULTI
+from clrs._src.multi_sol.algorithms.mst_prim.definition import (
+    ALGORITHM as _MST_PRIM_MULTI,
+)
+
+bellman_ford_multi = _BF_MULTI.generator.target
+bfs_multi = _BFS_MULTI.generator.target
+dfs_multi = _DFS_MULTI.generator.target
+mst_prim_multi = _MST_PRIM_MULTI.generator.target

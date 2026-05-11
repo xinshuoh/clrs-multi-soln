@@ -65,6 +65,33 @@ class BfsExtractorsTest(absltest.TestCase):
         [_DummyDatapoint([prob_matrix])], batch, beam_width=2)
     np.testing.assert_array_equal(trees[0], np.array([0, 0, 0]))
 
+  def test_extract_beam_keeps_source_self_parent(self):
+    prob_matrix = np.array([
+        [0.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.5, 0.5, 0.0],
+    ])
+    batch = types.SimpleNamespace(source_nodes=np.asarray([1]))
+    trees = extractors.extract_beam(
+        [_DummyDatapoint([prob_matrix])], batch, beam_width=2)
+    self.assertEqual(trees[0][1], 1)
+
+  def test_extract_beam_samples_parent_candidates(self):
+    prob_matrix = np.array([
+        [1.0, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.5, 0.5, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+    ])
+    sampled_trees = set()
+    for seed in range(10):
+      np.random.seed(seed)
+      sampled_trees.add(
+          tuple(extractors._bfs_beam_sampler(prob_matrix, 0, beam_width=1)))
+
+    self.assertIn((0, 0, 0, 2), sampled_trees)
+    self.assertIn((0, 0, 1, 2), sampled_trees)
+
 
 if __name__ == "__main__":
   absltest.main()

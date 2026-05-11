@@ -6,15 +6,11 @@ import numpy as np
 
 from clrs._src.multi_sol.algorithms.dfs import extractors as dfs_extractors
 from clrs._src.multi_sol.algorithms.common import extractor_utils
+from clrs._src.multi_sol.interfaces import Extractor
 
 
 def extract_argmax(outs_or_preds, _batch):
   return dfs_extractors.extract_argmax(outs_or_preds, _batch)
-
-
-def extract_argmax_true(outs_or_preds, _batch):
-  return dfs_extractors.extract_argmax_true(outs_or_preds, _batch)
-
 
 def extract_random(outs_or_preds, _batch):
   return dfs_extractors.extract_random(outs_or_preds, _batch)
@@ -112,10 +108,9 @@ def _mst_prim_greedy_sampler(
 
   return pi
 
-EXTRACTORS = {
-    "Argmax": extract_argmax,
-    "Random": extract_random,
-    "Tree": extract_tree,
-    "Greedy": extract_greedy,
-}
-
+EXTRACTORS = (
+    Extractor("Argmax", extract_argmax, extract_argmax),
+    Extractor("Random", extract_random, extract_random),
+    Extractor("Tree", extract_tree, extract_tree),
+    Extractor("Greedy", extract_greedy, extract_greedy),
+)

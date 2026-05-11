@@ -5,18 +5,11 @@ from __future__ import annotations
 import numpy as np
 
 from clrs._src.multi_sol.algorithms.common import extractor_utils
+from clrs._src.multi_sol.interfaces import Extractor
 
 def extract_argmax(outs_or_preds, _batch):
   trees = []
-  for pred in outs_or_preds:
-    for prob in pred["pi"].data:
-      trees.append(np.argmax(prob, axis=1))
-  return trees
-
-def extract_argmax_true(outs_or_preds, _batch):
-  trees = []
-  for output in outs_or_preds:
-    for prob in output.data:
+  for prob in extractor_utils.extract_prob_matrices(outs_or_preds):
       trees.append(np.argmax(prob, axis=1))
   return trees
 
@@ -91,10 +84,9 @@ def _explore_upwards(orphan_ix, parent_guesses, prob_matrix):
   return parent_guesses
 
 
-EXTRACTORS = {
-    "Argmax": extract_argmax,
-    "Random": extract_random,
-    "Upwards": extract_upwards,
-    "altUpwards": extract_alt_upwards,
-}
-
+EXTRACTORS = (
+    Extractor("Argmax", extract_argmax, extract_argmax),
+    Extractor("Random", extract_random, extract_random),
+    Extractor("Upwards", extract_upwards, extract_upwards),
+    Extractor("altUpwards", extract_alt_upwards, extract_alt_upwards),
+)

@@ -15,7 +15,13 @@ _Array = np.ndarray
 _Out = Tuple[_Array, probing.ProbesDict]
 
 
-def dfs_multi(A: _Array, seed: int, deterministic: bool = False) -> _Out:
+def dfs_multi(
+    A: _Array,
+    seed: int,
+    deterministic: bool = False,
+    num_solutions: int = 20,
+    output_name: str = "pi",
+) -> _Out:
   """Multiple-solution depth-first search target generation."""
   chex.assert_rank(A, 2)
   return generator_utils.generate_parent_distribution_target(
@@ -23,6 +29,8 @@ def dfs_multi(A: _Array, seed: int, deterministic: bool = False) -> _Out:
       num_nodes=A.shape[0],
       seed=seed,
       deterministic=deterministic,
+      num_solutions=num_solutions,
+      output_name=output_name,
       run_single=lambda rng, algorithm_spec, _deterministic: _dfs_execution(
           A, rng, algorithm_spec, deterministic),
   )

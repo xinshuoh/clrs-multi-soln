@@ -725,13 +725,10 @@ def _sampling_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
   return kwargs
 
 
-def _sampling_evaluator_for_algo(algorithm_name: str, profile: str):
+def _sampling_algorithm_for_algo(algorithm_name: str, profile: str):
   if profile != 'sampling':
     return None
-  definition = multisol_registry.get(algorithm_name)
-  if definition is None:
-    return None
-  return multisol_eval_pipeline.build_definition_evaluator(definition)
+  return multisol_registry.MULTI_SOL_ALGS.get(algorithm_name)
 
 
 def _sampling_report_sink(split: str, profile: str, run_dir: str):
@@ -1102,7 +1099,7 @@ def _run_single_seed(seed: int, run_dir: str):
         val_stats = multisol_eval_pipeline.evaluate_with_optional_sampling(
             algorithm_name=FLAGS.algorithms[algo_idx],
             profile=validation_profile,
-            sampling_evaluator=_sampling_evaluator_for_algo(
+            multi_sol_algorithm=_sampling_algorithm_for_algo(
                 FLAGS.algorithms[algo_idx], validation_profile),
             sampler=val_samplers[algo_idx],
             predict_fn=functools.partial(
@@ -1191,7 +1188,7 @@ def _run_single_seed(seed: int, run_dir: str):
     test_stats = multisol_eval_pipeline.evaluate_with_optional_sampling(
         algorithm_name=FLAGS.algorithms[algo_idx],
         profile=effective_profile,
-        sampling_evaluator=_sampling_evaluator_for_algo(
+        multi_sol_algorithm=_sampling_algorithm_for_algo(
             FLAGS.algorithms[algo_idx], effective_profile),
         sampler=test_samplers[algo_idx],
         predict_fn=functools.partial(eval_model.predict, algorithm_index=algo_idx),

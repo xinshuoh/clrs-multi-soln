@@ -37,92 +37,103 @@ class RunMultisolDispatchTest(absltest.TestCase):
 
   def test_default_profile_uses_fallback(self):
     called = {"fallback": False, "sampling": False}
-
-    def sampling_evaluator(**kwargs):
-      del kwargs
-      called["sampling"] = True
-      return {"score": 1.0}
+    original_evaluate_algorithm = pipeline.evaluate_algorithm
+    pipeline.evaluate_algorithm = lambda **kwargs: {"score": 1.0}
 
     def fallback_eval_fn(**kwargs):
       del kwargs
       called["fallback"] = True
       return {"score": 0.5}
 
-    out = pipeline.evaluate_with_optional_sampling(
-        algorithm_name="dfs_multi",
-        profile="default",
-        sampling_evaluator=sampling_evaluator,
-        sampler=object(),
-        predict_fn=object(),
-        sample_count=3,
-        rng_key=0,
-        extras={},
-        artifact_prefix="unused",
-        save_artifacts=False,
-        fallback_eval_fn=fallback_eval_fn,
-    )
+    try:
+      out = pipeline.evaluate_with_optional_sampling(
+          algorithm_name="dfs_multi",
+          profile="default",
+          multi_sol_algorithm=object(),
+          sampler=object(),
+          predict_fn=object(),
+          sample_count=3,
+          rng_key=0,
+          extras={},
+          artifact_prefix="unused",
+          save_artifacts=False,
+          fallback_eval_fn=fallback_eval_fn,
+      )
+    finally:
+      pipeline.evaluate_algorithm = original_evaluate_algorithm
     self.assertTrue(called["fallback"])
-    self.assertFalse(called["sampling"])
     self.assertEqual(out["score"], 0.5)
 
   def test_sampling_profile_uses_sampling(self):
     called = {"fallback": False, "sampling": False}
-
-    def sampling_evaluator(**kwargs):
+    seen = {}
+    original_evaluate_algorithm = pipeline.evaluate_algorithm
+    def _evaluate_algorithm(**kwargs):
       called["sampling"] = True
-      self.assertIs(kwargs["save_results_fn"], artifacts.discard_report)
+      seen["save_results_fn"] = kwargs["save_results_fn"]
       return {"score": 0.9}
+    pipeline.evaluate_algorithm = _evaluate_algorithm
 
     def fallback_eval_fn(**kwargs):
       del kwargs
       called["fallback"] = True
       return {"score": 0.1}
 
-    out = pipeline.evaluate_with_optional_sampling(
-        algorithm_name="dfs_multi",
-        profile="sampling",
-        sampling_evaluator=sampling_evaluator,
-        sampler=object(),
-        predict_fn=object(),
-        sample_count=3,
-        rng_key=0,
-        extras={},
-        artifact_prefix="unused",
-        save_artifacts=False,
-        fallback_eval_fn=fallback_eval_fn,
-    )
+    try:
+      out = pipeline.evaluate_with_optional_sampling(
+          algorithm_name="dfs_multi",
+          profile="sampling",
+          multi_sol_algorithm=object(),
+          sampler=object(),
+          predict_fn=object(),
+          sample_count=3,
+          rng_key=0,
+          extras={},
+          artifact_prefix="unused",
+          save_artifacts=False,
+          fallback_eval_fn=fallback_eval_fn,
+      )
+    finally:
+      pipeline.evaluate_algorithm = original_evaluate_algorithm
     self.assertFalse(called["fallback"])
     self.assertTrue(called["sampling"])
+    self.assertIs(seen["save_results_fn"], artifacts.discard_report)
     self.assertEqual(out["score"], 0.9)
 
   def test_sampling_profile_can_enable_artifact_sink(self):
     called = {"fallback": False, "sampling": False}
-
-    def sampling_evaluator(**kwargs):
+    seen = {}
+    original_evaluate_algorithm = pipeline.evaluate_algorithm
+    def _evaluate_algorithm(**kwargs):
       called["sampling"] = True
-      self.assertIs(kwargs["save_results_fn"], artifacts.save_pickle_report)
+      seen["save_results_fn"] = kwargs["save_results_fn"]
       return {"score": 0.9}
+    pipeline.evaluate_algorithm = _evaluate_algorithm
 
     def fallback_eval_fn(**kwargs):
       del kwargs
       called["fallback"] = True
       return {"score": 0.1}
 
-    out = pipeline.evaluate_with_optional_sampling(
-        algorithm_name="dfs_multi",
-        profile="sampling",
-        sampling_evaluator=sampling_evaluator,
-        sampler=object(),
-        predict_fn=object(),
-        sample_count=3,
-        rng_key=0,
-        extras={},
-        artifact_prefix="unused",
-        save_artifacts=True,
-        fallback_eval_fn=fallback_eval_fn,
-    )
+    try:
+      out = pipeline.evaluate_with_optional_sampling(
+          algorithm_name="dfs_multi",
+          profile="sampling",
+          multi_sol_algorithm=object(),
+          sampler=object(),
+          predict_fn=object(),
+          sample_count=3,
+          rng_key=0,
+          extras={},
+          artifact_prefix="unused",
+          save_artifacts=True,
+          fallback_eval_fn=fallback_eval_fn,
+      )
+    finally:
+      pipeline.evaluate_algorithm = original_evaluate_algorithm
     self.assertFalse(called["fallback"])
     self.assertTrue(called["sampling"])
+    self.assertIs(seen["save_results_fn"], artifacts.save_pickle_report)
     self.assertEqual(out["score"], 0.9)
 
   def test_sampling_profile_uses_custom_report_sink(self):
@@ -131,147 +142,84 @@ class RunMultisolDispatchTest(absltest.TestCase):
     def custom_sink(_result_dict, _filename):
       del _result_dict, _filename
 
-    def sampling_evaluator(**kwargs):
+    seen = {}
+    original_evaluate_algorithm = pipeline.evaluate_algorithm
+    def _evaluate_algorithm(**kwargs):
       called["sampling"] = True
-      self.assertIs(kwargs["save_results_fn"], custom_sink)
+      seen["save_results_fn"] = kwargs["save_results_fn"]
       return {"score": 0.8}
+    pipeline.evaluate_algorithm = _evaluate_algorithm
 
     def fallback_eval_fn(**kwargs):
       del kwargs
       called["fallback"] = True
       return {"score": 0.1}
 
-    out = pipeline.evaluate_with_optional_sampling(
-        algorithm_name="dfs_multi",
-        profile="sampling",
-        sampling_evaluator=sampling_evaluator,
-        sampler=object(),
-        predict_fn=object(),
-        sample_count=3,
-        rng_key=0,
-        extras={},
-        artifact_prefix="unused",
-        save_artifacts=False,
-        fallback_eval_fn=fallback_eval_fn,
-        report_sink=custom_sink,
-    )
+    try:
+      out = pipeline.evaluate_with_optional_sampling(
+          algorithm_name="dfs_multi",
+          profile="sampling",
+          multi_sol_algorithm=object(),
+          sampler=object(),
+          predict_fn=object(),
+          sample_count=3,
+          rng_key=0,
+          extras={},
+          artifact_prefix="unused",
+          save_artifacts=False,
+          fallback_eval_fn=fallback_eval_fn,
+          report_sink=custom_sink,
+      )
+    finally:
+      pipeline.evaluate_algorithm = original_evaluate_algorithm
     self.assertFalse(called["fallback"])
     self.assertTrue(called["sampling"])
+    self.assertIs(seen["save_results_fn"], custom_sink)
     self.assertEqual(out["score"], 0.8)
 
-  def test_sampling_profile_filters_unsupported_sampling_kwargs(self):
+  def test_sampling_profile_forwards_sampling_kwargs(self):
     called = {"fallback": False, "sampling": False}
     seen = {}
-
-    def sampling_evaluator(
-        *,
-        sampler,
-        predict_fn,
-        sample_count,
-        rng_key,
-        extras,
-        save_results_fn,
-        filename,
-        NSE,
-    ):
-      del sampler, predict_fn, sample_count, rng_key, extras, save_results_fn
-      seen["filename"] = filename
-      seen["NSE"] = NSE
+    original_evaluate_algorithm = pipeline.evaluate_algorithm
+    def _evaluate_algorithm(**kwargs):
+      seen["filename"] = kwargs["filename"]
+      seen["NSE"] = kwargs["NSE"]
       called["sampling"] = True
       return {"score": 0.7}
+    pipeline.evaluate_algorithm = _evaluate_algorithm
 
     def fallback_eval_fn(**kwargs):
       del kwargs
       called["fallback"] = True
       return {"score": 0.1}
 
-    out = pipeline.evaluate_with_optional_sampling(
-        algorithm_name="dfs_multi",
-        profile="sampling",
-        sampling_evaluator=sampling_evaluator,
-        sampler=object(),
-        predict_fn=object(),
-        sample_count=3,
-        rng_key=0,
-        extras={},
-        artifact_prefix="unused",
-        save_artifacts=False,
-        fallback_eval_fn=fallback_eval_fn,
-        sampling_kwargs={"NSE": 17, "vd_flag": True},
-    )
+    try:
+      out = pipeline.evaluate_with_optional_sampling(
+          algorithm_name="dfs_multi",
+          profile="sampling",
+          multi_sol_algorithm=object(),
+          sampler=object(),
+          predict_fn=object(),
+          sample_count=3,
+          rng_key=0,
+          extras={},
+          artifact_prefix="unused",
+          save_artifacts=False,
+          fallback_eval_fn=fallback_eval_fn,
+          sampling_kwargs={"NSE": 17, "vd_flag": True},
+      )
+    finally:
+      pipeline.evaluate_algorithm = original_evaluate_algorithm
     self.assertFalse(called["fallback"])
     self.assertTrue(called["sampling"])
     self.assertEqual(out["score"], 0.7)
     self.assertEqual(seen["NSE"], 17)
     self.assertEqual(seen["filename"], "unused_dfs_multi")
 
-  def test_registry_dispatch_uses_registered_sampling_evaluator(self):
-    called = {"fallback": False, "sampling": False}
-    seen = {}
-
-    class _SolutionSpace:
-      batch_extractor = object()
-      validator = object()
-      extraction_methods = {"categorical": object()}
-      algorithm_baseline = "predictions"
-      include_source_nodes = True
-
-    class _Extension:
-      def __init__(self):
-        self.solution_space = _SolutionSpace()
-
-    class _Registry:
-      def get(self, algorithm_name):
-        if algorithm_name == "dfs_multi":
-          return _Extension()
-        return None
-
-    def sampling_evaluator(**kwargs):
-      called["sampling"] = True
-      seen["filename"] = kwargs["filename"]
-      return {"score": 0.9}
-
-    def fallback_eval_fn(**kwargs):
-      del kwargs
-      called["fallback"] = True
-      return {"score": 0.1}
-
-    original_registry = pipeline._MULTISOL_REGISTRY
-    original_builder = pipeline.build_definition_evaluator
-    pipeline._MULTISOL_REGISTRY = _Registry()
-    pipeline.build_definition_evaluator = lambda _: sampling_evaluator
-    try:
-      out = pipeline.evaluate_with_sampling_registry(
-          algorithm_name="dfs_multi",
-          split="test",
-          profile="sampling",
-          sampler=object(),
-          predict_fn=object(),
-          sample_count=3,
-          rng_key=0,
-          extras={},
-          artifact_prefix="sampling_eval",
-          save_artifacts=False,
-          fallback_eval_fn=fallback_eval_fn,
-      )
-    finally:
-      pipeline._MULTISOL_REGISTRY = original_registry
-      pipeline.build_definition_evaluator = original_builder
-
-    self.assertFalse(called["fallback"])
-    self.assertTrue(called["sampling"])
-    self.assertEqual(seen["filename"], "sampling_eval_test_dfs_multi")
-    self.assertEqual(out["score"], 0.9)
-
-  def test_registry_dispatch_falls_back_for_non_multisol_algorithm(self):
+  def test_sampling_profile_falls_back_for_non_multisol_algorithm(self):
     called = {"fallback": False}
     seen = {}
     fallback_kwargs = {}
-
-    class _Registry:
-      def get(self, algorithm_name):
-        seen["algorithm_name"] = algorithm_name
-        return None
 
     sampler = object()
     predict_fn = object()
@@ -282,27 +230,21 @@ class RunMultisolDispatchTest(absltest.TestCase):
       fallback_kwargs.update(kwargs)
       return {"score": 0.5}
 
-    original_registry = pipeline._MULTISOL_REGISTRY
-    pipeline._MULTISOL_REGISTRY = _Registry()
-    try:
-      out = pipeline.evaluate_with_sampling_registry(
-          algorithm_name="bfs",
-          split="val",
-          profile="sampling",
-          sampler=sampler,
-          predict_fn=predict_fn,
-          sample_count=3,
-          rng_key=0,
-          extras=extras,
-          artifact_prefix="sampling_eval",
-          save_artifacts=False,
-          fallback_eval_fn=fallback_eval_fn,
-      )
-    finally:
-      pipeline._MULTISOL_REGISTRY = original_registry
+    out = pipeline.evaluate_with_optional_sampling(
+        algorithm_name="bfs",
+        profile="sampling",
+        multi_sol_algorithm=None,
+        sampler=sampler,
+        predict_fn=predict_fn,
+        sample_count=3,
+        rng_key=0,
+        extras=extras,
+        artifact_prefix="sampling_eval",
+        save_artifacts=False,
+        fallback_eval_fn=fallback_eval_fn,
+    )
 
     self.assertTrue(called["fallback"])
-    self.assertEqual(seen["algorithm_name"], "bfs")
     self.assertEqual(
         set(fallback_kwargs.keys()),
         {"sampler", "predict_fn", "sample_count", "rng_key", "extras"},
@@ -314,27 +256,23 @@ class RunMultisolDispatchTest(absltest.TestCase):
     self.assertIs(fallback_kwargs["extras"], extras)
     self.assertEqual(out["score"], 0.5)
 
-  def test_registry_dispatch_uses_upstream_path_for_default_profile(self):
+  def test_default_profile_skips_sampling_algorithm(self):
     called = {"fallback": False}
-
-    class _Registry:
-      def get(self, algorithm_name):
-        raise AssertionError(
-            f"Registry lookup should not run for default profile: {algorithm_name}"
-        )
+    original_evaluate_algorithm = pipeline.evaluate_algorithm
+    def _evaluate_algorithm(**kwargs):
+      raise AssertionError("Sampling path should not run for default profile.")
+    pipeline.evaluate_algorithm = _evaluate_algorithm
 
     def fallback_eval_fn(**kwargs):
       del kwargs
       called["fallback"] = True
       return {"score": 0.4}
 
-    original_registry = pipeline._MULTISOL_REGISTRY
-    pipeline._MULTISOL_REGISTRY = _Registry()
     try:
-      out = pipeline.evaluate_with_sampling_registry(
+      out = pipeline.evaluate_with_optional_sampling(
           algorithm_name="dfs_multi",
-          split="val",
           profile="default",
+          multi_sol_algorithm=object(),
           sampler=object(),
           predict_fn=object(),
           sample_count=3,
@@ -345,7 +283,7 @@ class RunMultisolDispatchTest(absltest.TestCase):
           fallback_eval_fn=fallback_eval_fn,
       )
     finally:
-      pipeline._MULTISOL_REGISTRY = original_registry
+      pipeline.evaluate_algorithm = original_evaluate_algorithm
 
     self.assertTrue(called["fallback"])
     self.assertEqual(out["score"], 0.4)

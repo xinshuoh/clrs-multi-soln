@@ -15,7 +15,14 @@ _Array = np.ndarray
 _Out = Tuple[_Array, probing.ProbesDict]
 
 
-def mst_prim_multi(A: _Array, s: int, seed: int, deterministic: bool = False) -> _Out:
+def mst_prim_multi(
+    A: _Array,
+    s: int,
+    seed: int,
+    deterministic: bool = False,
+    num_solutions: int = 20,
+    output_name: str = "pi",
+) -> _Out:
   """Multiple-solution target generation for Prim's MST algorithm."""
   chex.assert_rank(A, 2)
   return generator_utils.generate_parent_distribution_target(
@@ -23,6 +30,8 @@ def mst_prim_multi(A: _Array, s: int, seed: int, deterministic: bool = False) ->
       num_nodes=A.shape[0],
       seed=seed,
       deterministic=deterministic,
+      num_solutions=num_solutions,
+      output_name=output_name,
       run_single=lambda rng, algorithm_spec, deterministic: (
           _mst_prim_execution(A, s, rng, algorithm_spec, deterministic)),
   )

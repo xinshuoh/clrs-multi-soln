@@ -3,53 +3,18 @@
 from __future__ import annotations
 
 import copy
-import dataclasses
-import inspect
 from typing import Any, Callable, Dict, Sequence, Tuple
 
 from absl import logging
 import numpy as np
 
-from clrs._src.multi_sol.core import definitions
 from clrs._src.multi_sol.evaluation import artifacts
-from clrs._src.multi_sol.evaluation import sampling_metrics
-
-
-BatchExtractor = Callable[[Any], Tuple[np.ndarray, np.ndarray]]
-SampleFn = Callable[[Any, "EvaluationBatch"], Any]
-ValidateFn = Callable[[np.ndarray, object, int], bool]
-AlgorithmSampleFn = Callable[["EvaluationBatch", np.random.Generator], Any]
-
-
-@dataclasses.dataclass(frozen=True)
-class EvaluationBatch:
-  """Collected model inputs and outputs for one multi-solution evaluation."""
-
-  outputs: Any
-  preds: Any
-  adjacency: np.ndarray
-  source_nodes: np.ndarray
-
-
-@dataclasses.dataclass(frozen=True)
-class SamplingMethod:
-  """Model/target sampling pair used for validity and uniqueness evaluation."""
-
-  name: str
-  model_sample_fn: SampleFn
-  true_sample_fn: SampleFn
-
-
-@dataclasses.dataclass(frozen=True)
-class AlgorithmSamplingSource:
-  """Optional symbolic sampler used as a distribution-validation comparator."""
-
-  method_name: str
-  source_name: str
-  sample_fn: AlgorithmSampleFn
-
-
-_MULTISOL_REGISTRY = None
+from clrs._src.multi_sol.evaluation import distribution_validation
+from clrs._src.multi_sol.interfaces import BatchExtractor
+from clrs._src.multi_sol.interfaces import EvaluationBatch
+from clrs._src.multi_sol.interfaces import Extractor
+from clrs._src.multi_sol.interfaces import MultiSolAlgorithm
+from clrs._src.multi_sol.interfaces import ValidatorFn
 
 
 def _accuracy(mask) -> float:
@@ -87,9 +52,9 @@ def _evaluate_sampling_pair(
   }
 
 
-def evaluate_definition(
+def evaluate_algorithm(
     *,
-    definition: definitions.MultiSolAlgorithm,
+    algorithm: MultiSolAlgorithm,
     sampler,
     predict_fn,
     sample_count,
@@ -103,67 +68,27 @@ def evaluate_definition(
     curve_max_graphs=None,
 ) -> Dict[str, Any]:
   """Evaluate a multi-solution algorithm from its definition object."""
-  solution_space = definition.solution_space
-  return evaluate_sampling_batch(
+  return _evaluate_sampling_batch(
       sampler=sampler,
       predict_fn=predict_fn,
       sample_count=sample_count,
       rng_key=rng_key,
       extras=extras,
-      batch_extractor=solution_space.batch_extractor,
-      validate_fn=solution_space.validator,
-      sampling_methods=_to_sampling_methods(solution_space.extraction_methods),
+      algorithm=algorithm,
       save_results_fn=save_results_fn,
-      filename=filename or definition.name,
+      filename=filename or algorithm.name,
       vd_flag=vd_flag,
       n_samples=NSE,
       output_dir=output_dir,
       curve_max_graphs=curve_max_graphs,
-      algorithm_source=_to_algorithm_source(definition),
-      include_source_nodes=solution_space.include_source_nodes,
   )
-
-
-def build_definition_evaluator(definition):
-  """Return a callable evaluator bound to a definition object."""
-
-  def _evaluate(
-      *,
-      sampler,
-      predict_fn,
-      sample_count,
-      rng_key,
-      extras,
-      save_results_fn=None,
-      filename=None,
-      vd_flag=False,
-      NSE=100,
-      output_dir=".",
-      curve_max_graphs=None,
-  ):
-    return evaluate_definition(
-        definition=definition,
-        sampler=sampler,
-        predict_fn=predict_fn,
-        sample_count=sample_count,
-        rng_key=rng_key,
-        extras=extras,
-        save_results_fn=save_results_fn,
-        filename=filename,
-        vd_flag=vd_flag,
-        NSE=NSE,
-        output_dir=output_dir,
-        curve_max_graphs=curve_max_graphs,
-    )
-
-  return _evaluate
 
 
 def evaluate_with_optional_sampling(
     *,
     algorithm_name: str,
     profile: str,
-    sampling_evaluator: Callable[..., Dict[str, Any]] | None,
+    multi_sol_algorithm: MultiSolAlgorithm | None,
     sampler,
     predict_fn,
     sample_count: int,
@@ -175,8 +100,8 @@ def evaluate_with_optional_sampling(
     sampling_kwargs: Dict[str, Any] | None = None,
     report_sink: Callable[[Dict[str, Any], str], None] | None = None,
 ) -> Dict[str, Any]:
-  """Evaluate using sampling evaluator when requested, else fallback."""
-  if profile == "sampling" and sampling_evaluator is not None:
+  """Evaluate using multi-solution sampling when requested, else fallback."""
+  if profile == "sampling" and multi_sol_algorithm is not None:
     save_fn = report_sink
     if save_fn is None:
       save_fn = (
@@ -185,6 +110,7 @@ def evaluate_with_optional_sampling(
           else artifacts.discard_report
       )
     sampling_call_kwargs = dict(
+        algorithm=multi_sol_algorithm,
         sampler=sampler,
         predict_fn=predict_fn,
         sample_count=sample_count,
@@ -193,10 +119,9 @@ def evaluate_with_optional_sampling(
         save_results_fn=save_fn,
         filename=f"{artifact_prefix}_{algorithm_name}",
     )
-    sampling_call_kwargs.update(
-        _filter_sampling_kwargs(sampling_evaluator, sampling_kwargs)
-    )
-    return sampling_evaluator(**sampling_call_kwargs)
+    if sampling_kwargs:
+      sampling_call_kwargs.update(dict(sampling_kwargs))
+    return evaluate_algorithm(**sampling_call_kwargs)
   return fallback_eval_fn(
       sampler=sampler,
       predict_fn=predict_fn,
@@ -206,62 +131,20 @@ def evaluate_with_optional_sampling(
   )
 
 
-def evaluate_with_sampling_registry(
-    *,
-    algorithm_name: str,
-    split: str,
-    profile: str,
-    sampler,
-    predict_fn,
-    sample_count: int,
-    rng_key,
-    extras: Dict[str, Any],
-    artifact_prefix: str,
-    save_artifacts: bool,
-    fallback_eval_fn: Callable[..., Dict[str, Any]],
-    sampling_kwargs: Dict[str, Any] | None = None,
-    report_sink: Callable[[Dict[str, Any], str], None] | None = None,
-) -> Dict[str, Any]:
-  """Evaluate by resolving optional sampling evaluators from the registry."""
-  sampling_evaluator = _resolve_sampling_evaluator(
-      algorithm_name=algorithm_name, profile=profile
-  )
-  split_prefix = f"{artifact_prefix}_{split}"
-  return evaluate_with_optional_sampling(
-      algorithm_name=algorithm_name,
-      profile=profile,
-      sampling_evaluator=sampling_evaluator,
-      sampler=sampler,
-      predict_fn=predict_fn,
-      sample_count=sample_count,
-      rng_key=rng_key,
-      extras=extras,
-      artifact_prefix=split_prefix,
-      save_artifacts=save_artifacts,
-      fallback_eval_fn=fallback_eval_fn,
-      sampling_kwargs=sampling_kwargs,
-      report_sink=report_sink,
-  )
-
-
-def evaluate_sampling_batch(
+def _evaluate_sampling_batch(
     *,
     sampler,
     predict_fn,
     sample_count: int,
     rng_key,
     extras: Dict[str, Any],
-    batch_extractor: BatchExtractor,
-    validate_fn: ValidateFn,
-    sampling_methods: Sequence[SamplingMethod],
+    algorithm: MultiSolAlgorithm,
     save_results_fn=None,
     filename: str,
     vd_flag: bool = False,
     n_samples: int = 100,
     output_dir: str = ".",
     curve_max_graphs: int | None = None,
-    algorithm_source: AlgorithmSamplingSource | None = None,
-    include_source_nodes: bool = False,
 ) -> Dict[str, Any]:
   """Collect predictions, evaluate samplers, and persist reports."""
   logging.info(
@@ -271,19 +154,19 @@ def evaluate_sampling_batch(
       predict_fn=predict_fn,
       sample_count=sample_count,
       rng_key=rng_key,
-      batch_extractor=batch_extractor,
+      batch_extractor=algorithm.batch_extractor,
   )
 
   logging.info('Multi-solution evaluation: evaluating one-shot samplers.')
   pair_results = _evaluate_sampling_pairs(
       batch=batch,
-      sampling_methods=sampling_methods,
-      validate_fn=validate_fn,
+      extractors=algorithm.extractors,
+      validate_fn=algorithm.validator,
   )
   result_dict = _build_result_dict(
       batch=batch,
       pair_results=pair_results,
-      include_source_nodes=include_source_nodes,
+      include_source_nodes=algorithm.include_source_nodes_in_report,
   )
 
   logging.info(
@@ -293,27 +176,27 @@ def evaluate_sampling_batch(
   )
   sampling_summary = _evaluate_sampling_distributions(
       batch=batch,
-      sampling_methods=sampling_methods,
-      validate_fn=validate_fn,
+      extractors=algorithm.extractors,
+      validate_fn=algorithm.validator,
       n_samples=n_samples,
       curve_max_graphs=curve_max_graphs,
   )
   result_dict.update(sampling_summary["result_dict"])
 
-  if vd_flag and algorithm_source is not None:
+  if vd_flag and algorithm.reference_sampler is not None:
     logging.info(
         'Multi-solution evaluation: evaluating algorithm-source sampler.')
     algorithm_summary = _evaluate_algorithm_source(
         batch=batch,
-        algorithm_source=algorithm_source,
-        validate_fn=validate_fn,
+        algorithm=algorithm,
+        validate_fn=algorithm.validator,
         n_samples=n_samples,
         curve_max_graphs=curve_max_graphs,
     )
     result_dict.update(algorithm_summary["result_dict"])
     sampling_summary["curves"].extend(algorithm_summary["curves"])
     out.update(algorithm_summary["scalar_metrics"])
-    sampling_metrics.save_sampling_curve_artifacts(
+    distribution_validation.save_sampling_curve_artifacts(
         sampling_summary["curves"],
         filename=filename,
         output_dir=output_dir,
@@ -381,19 +264,19 @@ def _collect_batch(
 def _evaluate_sampling_pairs(
     *,
     batch: EvaluationBatch,
-    sampling_methods: Sequence[SamplingMethod],
-    validate_fn: ValidateFn,
+    extractors: Sequence[Extractor],
+    validate_fn: ValidatorFn,
 ) -> Dict[str, Dict[str, object]]:
   results = {}
-  for method in sampling_methods:
+  for extractor in extractors:
     logging.info(
         'Multi-solution evaluation: evaluating one-shot method %s.',
-        method.name,
+        extractor.name,
     )
-    results[method.name] = _evaluate_sampling_pair(
-        model_sample_fn=lambda data, method=method: method.model_sample_fn(
+    results[extractor.name] = _evaluate_sampling_pair(
+        model_sample_fn=lambda data, extractor=extractor: extractor.model_sample(
             data, batch),
-        true_sample_fn=lambda data, method=method: method.true_sample_fn(
+        true_sample_fn=lambda data, extractor=extractor: extractor.target_sample(
             data, batch),
         model_input=[batch.preds],
         true_input=batch.outputs,
@@ -407,19 +290,19 @@ def _evaluate_sampling_pairs(
 def _evaluate_sampling_distributions(
     *,
     batch: EvaluationBatch,
-    sampling_methods: Sequence[SamplingMethod],
-    validate_fn: ValidateFn,
+    extractors: Sequence[Extractor],
+    validate_fn: ValidatorFn,
     n_samples: int,
     curve_max_graphs: int | None,
 ) -> Dict[str, object]:
   model_methods = {}
   true_methods = {}
-  for method in sampling_methods:
-    model_methods[method.name] = (
-        lambda data, method=method: method.model_sample_fn(data, batch))
-    true_methods[method.name] = (
-        lambda data, method=method: method.true_sample_fn(data, batch))
-  return sampling_metrics.evaluate_mixed_sampling_methods(
+  for extractor in extractors:
+    model_methods[extractor.name] = (
+        lambda data, extractor=extractor: extractor.model_sample(data, batch))
+    true_methods[extractor.name] = (
+        lambda data, extractor=extractor: extractor.target_sample(data, batch))
+  return distribution_validation.evaluate_mixed_sampling_methods(
       model_methods=model_methods,
       true_methods=true_methods,
       model_input=[batch.preds],
@@ -435,16 +318,22 @@ def _evaluate_sampling_distributions(
 def _evaluate_algorithm_source(
     *,
     batch: EvaluationBatch,
-    algorithm_source: AlgorithmSamplingSource,
-    validate_fn: ValidateFn,
+    algorithm: MultiSolAlgorithm,
+    validate_fn: ValidatorFn,
     n_samples: int,
     curve_max_graphs: int | None,
 ) -> Dict[str, object]:
+  reference_sampler = algorithm.reference_sampler
+  if reference_sampler is None:
+    return {"result_dict": {}, "scalar_metrics": {}, "curves": []}
+  generator = algorithm.generator
   algorithm_rng = np.random.default_rng(np.random.randint(0, 2**32))
-  return sampling_metrics.evaluate_sampling_sources(
+  source_nodes = batch.source_nodes if generator.uses_source_node else None
+  return distribution_validation.evaluate_sampling_sources(
       sources={
-          (algorithm_source.method_name, algorithm_source.source_name): (
-              lambda _data: algorithm_source.sample_fn(batch, algorithm_rng),
+          (reference_sampler.name, reference_sampler.source_name): (
+              lambda _data: generator.sample_batch(
+                  batch.adjacency, source_nodes, algorithm_rng),
               None,
           ),
       },
@@ -507,74 +396,3 @@ def _clrs():
 def _concat_tree():
   from clrs._src.multi_sol.algorithms.common import batch_extractors
   return batch_extractors.concat_tree
-
-
-def _to_sampling_methods(extraction_methods):
-  return tuple(
-      SamplingMethod(
-          method.name,
-          method.model_distribution_sample,
-          method.target_distribution_sample,
-      )
-      for method in extraction_methods
-  )
-
-
-def _to_algorithm_source(definition):
-  algorithm_baseline = definition.solution_space.algorithm_baseline
-  symbolic_sampler = definition.training.symbolic_sampler
-  if algorithm_baseline is None or symbolic_sampler is None:
-    return None
-  def _sample(batch, rng):
-    source_nodes = batch.source_nodes if symbolic_sampler.uses_source_node else None
-    return symbolic_sampler.sample_batch(batch.adjacency, source_nodes, rng)
-  return AlgorithmSamplingSource(
-      algorithm_baseline.name,
-      algorithm_baseline.source_name,
-      _sample,
-  )
-
-
-def _get_multisol_registry():
-  global _MULTISOL_REGISTRY
-  if _MULTISOL_REGISTRY is None:
-    from clrs._src.multi_sol import registry as multisol_registry
-    _MULTISOL_REGISTRY = multisol_registry
-  return _MULTISOL_REGISTRY
-
-
-def _resolve_sampling_evaluator(
-    *,
-    algorithm_name: str,
-    profile: str,
-) -> Callable[..., Dict[str, Any]] | None:
-  if profile != "sampling":
-    return None
-  extension = _get_multisol_registry().get(algorithm_name)
-  if extension is None:
-    return None
-  return build_definition_evaluator(extension)
-
-
-def _filter_sampling_kwargs(
-    sampling_evaluator: Callable[..., Dict[str, Any]],
-    sampling_kwargs: Dict[str, Any] | None,
-) -> Dict[str, Any]:
-  if not sampling_kwargs:
-    return {}
-  try:
-    signature = inspect.signature(sampling_evaluator)
-  except (TypeError, ValueError):
-    return dict(sampling_kwargs)
-
-  if any(
-      param.kind is inspect.Parameter.VAR_KEYWORD
-      for param in signature.parameters.values()
-  ):
-    return dict(sampling_kwargs)
-
-  return {
-      key: value
-      for key, value in sampling_kwargs.items()
-      if key in signature.parameters
-  }

@@ -34,6 +34,7 @@ import tensorflow as tf
 
 from clrs._src.multi_sol.evaluation import artifacts as multisol_artifacts
 from clrs._src.multi_sol.evaluation import pipeline as multisol_eval_pipeline
+from clrs._src.multi_sol import registry as multisol_registry
 
 
 flags.DEFINE_list('algorithms', ['bfs'], 'Which algorithms to run.')
@@ -724,6 +725,12 @@ def _sampling_eval_kwargs(split: str, run_dir: str) -> Dict[str, Any]:
   return kwargs
 
 
+def _sampling_algorithm_for_algo(algorithm_name: str, profile: str):
+  if profile != 'sampling':
+    return None
+  return multisol_registry.MULTI_SOL_ALGS.get(algorithm_name)
+
+
 def _sampling_report_sink(split: str, profile: str, run_dir: str):
   if split != 'test' or profile != 'sampling':
     return None
@@ -1089,20 +1096,21 @@ def _run_single_seed(seed: int, run_dir: str):
 
         # Validation info.
         new_rng_key, rng_key = jax.random.split(rng_key)
-        val_stats = multisol_eval_pipeline.evaluate_with_sampling_registry(
+        val_stats = multisol_eval_pipeline.evaluate_with_optional_sampling(
             algorithm_name=FLAGS.algorithms[algo_idx],
-            split='val',
             profile=validation_profile,
+            multi_sol_algorithm=_sampling_algorithm_for_algo(
+                FLAGS.algorithms[algo_idx], validation_profile),
             sampler=val_samplers[algo_idx],
             predict_fn=functools.partial(
                 eval_model.predict, algorithm_index=algo_idx),
             sample_count=val_sample_counts[algo_idx],
             rng_key=new_rng_key,
             extras=common_extras,
-            artifact_prefix=FLAGS.sampling_artifact_prefix,
-            save_artifacts=False,
-            fallback_eval_fn=collect_and_eval,
-            sampling_kwargs=_sampling_eval_kwargs(split='val', run_dir=run_dir),
+        artifact_prefix=f'{FLAGS.sampling_artifact_prefix}_val',
+        save_artifacts=False,
+        fallback_eval_fn=collect_and_eval,
+        sampling_kwargs=_sampling_eval_kwargs(split='val', run_dir=run_dir),
             report_sink=_sampling_report_sink(
                 split='val', profile=validation_profile, run_dir=run_dir),
         )
@@ -1177,16 +1185,17 @@ def _run_single_seed(seed: int, run_dir: str):
                      'algorithm': FLAGS.algorithms[algo_idx]}
 
     new_rng_key, rng_key = jax.random.split(rng_key)
-    test_stats = multisol_eval_pipeline.evaluate_with_sampling_registry(
+    test_stats = multisol_eval_pipeline.evaluate_with_optional_sampling(
         algorithm_name=FLAGS.algorithms[algo_idx],
-        split='test',
         profile=effective_profile,
+        multi_sol_algorithm=_sampling_algorithm_for_algo(
+            FLAGS.algorithms[algo_idx], effective_profile),
         sampler=test_samplers[algo_idx],
         predict_fn=functools.partial(eval_model.predict, algorithm_index=algo_idx),
         sample_count=test_sample_counts[algo_idx],
         rng_key=new_rng_key,
         extras=common_extras,
-        artifact_prefix=FLAGS.sampling_artifact_prefix,
+        artifact_prefix=f'{FLAGS.sampling_artifact_prefix}_test',
         save_artifacts=FLAGS.save_sampling_artifacts,
         fallback_eval_fn=collect_and_eval,
         sampling_kwargs=_sampling_eval_kwargs(split='test', run_dir=run_dir),

@@ -8,16 +8,16 @@ from clrs._src import algorithms
 from clrs._src import samplers
 from clrs._src import specs
 from clrs._src.multi_sol.evaluation import pipeline
-from clrs._src.multi_sol.core import registry
+from clrs._src.multi_sol import registry
 
 
 class MultiSolRegistryTest(absltest.TestCase):
 
-  def test_builtin_extensions_registered(self):
-    extensions = registry.names()
-    self.assertIn("dfs_multi", extensions)
-    self.assertIn("bfs_multi", extensions)
-    self.assertIn("bellman_ford_multi", extensions)
+  def test_builtin_algorithms_registered(self):
+    algorithms_ = tuple(registry.MULTI_SOL_ALGS.keys())
+    self.assertIn("dfs_multi", algorithms_)
+    self.assertIn("bfs_multi", algorithms_)
+    self.assertIn("bellman_ford_multi", algorithms_)
 
   def test_core_specs_include_multisol_entries(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
@@ -41,41 +41,32 @@ class MultiSolRegistryTest(absltest.TestCase):
   def test_multisol_generators_are_exposed_in_algorithms_namespace(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
       generator_fn = getattr(algorithms, name)
-      self.assertIn(".generator", generator_fn.__module__)
+      self.assertIn(".interfaces", type(generator_fn.__self__).__module__)
 
   def test_build_sampler_uses_algorithms_namespace(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
       sampler, _ = samplers.build_sampler(name, num_samples=1, length=4, seed=0)
       self.assertIs(sampler._algorithm, getattr(algorithms, name))  # pylint: disable=protected-access
 
-  def test_builtin_extensions_expose_solution_spaces(self):
+  def test_builtin_algorithms_expose_sampling_interfaces(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get(name)
-      self.assertIsNotNone(extension)
-      self.assertEqual(extension.name, name)
-      self.assertIsNotNone(extension.solution_space.batch_extractor)
-      self.assertIsNotNone(extension.solution_space.validator)
-      self.assertNotEmpty(extension.solution_space.extraction_methods)
+      algorithm = registry.MULTI_SOL_ALGS.get(name)
+      self.assertIsNotNone(algorithm)
+      self.assertEqual(algorithm.name, name)
+      self.assertIsNotNone(algorithm.batch_extractor)
+      self.assertIsNotNone(algorithm.validator)
+      self.assertNotEmpty(algorithm.extractors)
+      self.assertEqual(algorithm.generator.num_solutions, 20)
+      self.assertEqual(algorithm.generator.output_name, "pi")
+      self.assertIsNotNone(algorithm.reference_sampler)
 
-  def test_builtin_extensions_expose_training_config(self):
+  def test_builtin_algorithms_use_generic_sampling_evaluator(self):
     for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get(name)
-      self.assertIsNotNone(extension)
-      self.assertEqual(extension.training.num_solutions, 20)
-      self.assertEqual(extension.training.output_name, "pi")
-      self.assertIsNotNone(extension.training.symbolic_sampler)
-
-  def test_builtin_extensions_expose_algorithm_baselines(self):
-    for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get(name)
-      self.assertIsNotNone(extension)
-      self.assertIsNotNone(extension.solution_space.algorithm_baseline)
-
-  def test_builtin_extensions_use_generic_sampling_evaluator(self):
-    for name in ("dfs_multi", "bfs_multi", "bellman_ford_multi"):
-      extension = registry.get(name)
-      self.assertIsNotNone(extension)
-      self.assertIsNotNone(pipeline.build_definition_evaluator(extension))
+      algorithm = registry.MULTI_SOL_ALGS.get(name)
+      self.assertIsNotNone(algorithm)
+      self.assertIsNotNone(algorithm.batch_extractor)
+      self.assertIsNotNone(algorithm.validator)
+      self.assertNotEmpty(algorithm.extractors)
 
 
 if __name__ == "__main__":
