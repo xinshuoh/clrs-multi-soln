@@ -30,6 +30,115 @@ def dfsverify(G, F):
   return True
 
 
+def dfsverify_simple(adjacency, predecessor):
+  """Validate a DFS predecessor forest using the recursive subroot criterion.
+
+  This implements the simpler recursive checker used in the accompanying
+  pseudocode. It intentionally does not replace `dfsverify`; callers can swap it
+  into `check_valid_dfs_tree` when they want to evaluate that criterion.
+  """
+  graph = (nx.from_numpy_array(adjacency, create_using=nx.DiGraph) if isinstance(
+      adjacency, np.ndarray) else adjacency)
+  predecessor = _as_predecessor_array(predecessor, len(graph))
+  if predecessor is None:
+    return False
+
+  active_nodes = set(graph.nodes())
+  return _valid_forest_simple(graph, predecessor, active_nodes)
+
+
+def _as_predecessor_array(predecessor, num_nodes):
+  """Coerce either a predecessor array or forest adjacency matrix to parents."""
+  predecessor = np.asarray(predecessor)
+  if predecessor.ndim == 1:
+    if len(predecessor) != num_nodes:
+      return None
+    return predecessor.astype(int)
+
+  if predecessor.ndim != 2 or predecessor.shape != (num_nodes, num_nodes):
+    return None
+
+  parents = np.arange(num_nodes)
+  for node in range(num_nodes):
+    incoming = np.flatnonzero(predecessor[:, node])
+    incoming = incoming[incoming != node]
+    if len(incoming) > 1:
+      return None
+    if len(incoming) == 1:
+      parents[node] = int(incoming[0])
+  return parents
+
+
+def _valid_forest_simple(graph, predecessor, active_nodes):
+  if len(active_nodes) <= 1:
+    return True
+
+  subroots = {
+      node for node in active_nodes
+      if predecessor[node] not in active_nodes or predecessor[node] == node
+  }
+  if not subroots and active_nodes:
+    return False
+
+  subroot_by_node = {}
+  if len(subroots) > 1:
+    for node in active_nodes:
+      subroot = _find_active_subroot(node, predecessor, active_nodes, subroots)
+      if subroot is None:
+        return False
+      subroot_by_node[node] = subroot
+
+    component_graph = nx.DiGraph()
+    component_graph.add_nodes_from(subroots)
+    for u, v in graph.edges():
+      if u not in active_nodes or v not in active_nodes:
+        continue
+      if subroot_by_node[u] != subroot_by_node[v]:
+        component_graph.add_edge(subroot_by_node[u], subroot_by_node[v])
+
+    if not nx.is_directed_acyclic_graph(component_graph):
+      return False
+
+  for root in subroots:
+    descendants = {
+        node for node in active_nodes
+        if node != root and _has_active_ancestor(node, root, predecessor, active_nodes)
+    }
+    if descendants and not _valid_forest_simple(graph, predecessor, descendants):
+      return False
+
+  return True
+
+
+def _find_active_subroot(node, predecessor, active_nodes, subroots):
+  seen = set()
+  current = node
+  while current in active_nodes:
+    if current in seen:
+      return None
+    seen.add(current)
+    if current in subroots:
+      return current
+    current = int(predecessor[current])
+  return None
+
+
+def _has_active_ancestor(node, ancestor, predecessor, active_nodes):
+  seen = set()
+  current = node
+  while current in active_nodes:
+    if current in seen:
+      return False
+    seen.add(current)
+    parent = int(predecessor[current])
+    if parent == ancestor:
+      return True
+    if parent == current:
+      return False
+    current = parent
+  return False
+
+
 def no_self_loops_parent_tree_to_adj_matrix(
     tree):  # FIXME: duplicate code in validate_distributions cuz im lazy
   """now root is just any node without parent"""
@@ -211,6 +320,7 @@ def check_valid_dfs_tree(adjacency, parent_tree):
 
 
 __all__ = (
+    "dfsverify_simple",
     "replace_self_loops_with_minus1",
     "are_valid_edges_parents",
     "are_valid_order_parents",

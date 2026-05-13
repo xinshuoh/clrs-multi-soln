@@ -28,11 +28,12 @@ DISPLAY_NAMES = {
     "Prim": "Prim-like",
 }
 ALGORITHM_METHODS = {
-    "bfs_multi": ("Categorical", "Prim", "Beam", "Random"),
+    "bfs_multi": ("Categorical", "Prim", "Wave", "Random"),
     "dfs_multi": ("Argmax", "altUpwards", "Upwards", "Random"),
     "bellman_ford_multi": ("Argmax", "Beam", "Greedy", "Random"),
     "mst_prim_multi": ("Argmax", "Tree", "Greedy", "Random"),
 }
+DETERMINISTIC_BASELINES = ("Argmax", "Random")
 ALGORITHM_DISPLAY_NAMES = {
     "bfs_multi": "BFS",
     "dfs_multi": "DFS",
@@ -88,6 +89,47 @@ def sampling_files(
   pattern = (root / algorithm / processor / "eval" / f"test_length_{size}_n100" / "seed_*" /
              "samples.csv")
   return [Path(p) for p in sorted(glob.glob(str(pattern)))]
+
+
+def sampling_files_for_eval_suffix(
+    root: Path,
+    algorithm: str,
+    size: int,
+    eval_suffix: str,
+    processor: str = "triplet-gmpnn",
+) -> list[Path]:
+  """Return per-seed sampling report files for a specific eval directory suffix."""
+  pattern = (root / algorithm / processor / "eval" / f"test_length_{size}_{eval_suffix}" /
+             "seed_*" / "samples.csv")
+  return [Path(p) for p in sorted(glob.glob(str(pattern)))]
+
+
+def sampling_summary_file(
+    root: Path,
+    algorithm: str,
+    size: int,
+    processor: str = "triplet-gmpnn",
+) -> Path | None:
+  """Return a seed-test-summary file for sampling diversity metrics."""
+  exact = (root / algorithm / processor / "eval" / f"test_length_{size}_n100" /
+           "seed-test-summary.csv")
+  if exact.exists():
+    return exact
+
+  candidates = [
+      Path(p) for p in sorted(
+          glob.glob(
+              str(root / algorithm / processor / "eval" / f"test_length_{size}*" /
+                  "seed-test-summary.csv")))
+  ]
+  if candidates:
+    return candidates[0]
+
+  legacy = root / algorithm / "eval" / f"test_length_{size}" / "seed-test-summary.csv"
+  if legacy.exists():
+    return legacy
+
+  return None
 
 
 def load_score_frame(path: Path) -> pd.DataFrame:
@@ -197,11 +239,108 @@ def sampling_summary(
   return pd.DataFrame(rows)
 
 
+def sampling_summary_for_eval_suffix(
+    root: Path,
+    algorithm: str,
+    methods: Iterable[str],
+    eval_suffix: str,
+    processor: str = "triplet-gmpnn",
+) -> pd.DataFrame:
+  """Aggregate graph accuracy from sampling reports in a special eval directory."""
+  rows = []
+  for size in SIZES:
+    per_seed = []
+    for path in sampling_files_for_eval_suffix(root,
+                                               algorithm,
+                                               size,
+                                               eval_suffix,
+                                               processor=processor):
+      frame = pd.read_csv(path)
+      seed_row = {}
+      for method in methods:
+        for source in SOURCES:
+          prefix = f"{method}_{source}"
+          column = f"{prefix}_Accuracy"
+          if column not in frame.columns:
+            raise KeyError(f"Missing {column} in {path}")
+          seed_row[f"{prefix}_accuracy"] = frame[column].mean()
+      per_seed.append(seed_row)
+    if not per_seed:
+      continue
+
+    per_seed_frame = pd.DataFrame(per_seed)
+    for method in methods:
+      for source in SOURCES:
+        series = per_seed_frame[f"{method}_{source}_accuracy"]
+        rows.append({
+            "algorithm": algorithm,
+            "processor": processor,
+            "eval_suffix": eval_suffix,
+            "size": size,
+            "method": method,
+            "source": source,
+            "metric": "accuracy",
+            "mean": series.mean(),
+            "std": series.std(ddof=1) if len(series) > 1 else 0.0,
+            "num_seeds": len(series),
+        })
+  return pd.DataFrame(rows)
+
+
+def diversity_summary(
+    root: Path,
+    algorithm: str,
+    methods: Iterable[str],
+    processor: str = "triplet-gmpnn",
+) -> pd.DataFrame:
+  """Aggregate Table-1-style uniqueness and validity from seed summaries."""
+  rows = []
+  for size in SIZES:
+    path = sampling_summary_file(root, algorithm, size, processor=processor)
+    if path is None:
+      continue
+
+    frame = pd.read_csv(path)
+    metrics = {str(row["Metric"]): row for _, row in frame.iterrows()}
+    for method in methods:
+      for source in SOURCES:
+        for metric_name, display_metric in (
+            ("Uniqueness", "uniqueness"),
+            ("Valid", "valid"),
+            ("Valid_Unique", "valid_unique"),
+        ):
+          key = f"{method}_{source}_{metric_name}"
+          if key not in metrics:
+            continue
+          row = metrics[key]
+          rows.append({
+              "algorithm": algorithm,
+              "processor": processor,
+              "size": size,
+              "method": method,
+              "source": source,
+              "metric": display_metric,
+              "mean": float(row["Mean"]),
+              "std": float(row["Std"]),
+              "num_seeds": int(row["Num Seeds"]),
+              "source_file": str(path),
+          })
+  return pd.DataFrame(rows)
+
+
 def _latex_cell(mean: float, std: float, bold: bool = False) -> str:
   mean_str = f"\\bm{{{mean*100:.2f}}}" if bold else f"{mean*100:.2f}"
   std_str = f"{std*100:.2f}"
 
   return f"${mean_str} \\pm {std_str}$"
+
+
+def _latex_method_name(method: str) -> str:
+  """Return display name for an extraction method in LaTeX table headers."""
+  name = DISPLAY_NAMES.get(method, method)
+  if method in DETERMINISTIC_BASELINES:
+    return f"{name}$^{{*}}$"
+  return name
 
 
 def write_sampling_table(
@@ -230,8 +369,7 @@ def write_sampling_table(
       f"\\multicolumn{{{num_methods}}}{{c}}{{\\textbf{{Extraction Method}}}} \\\\",
       f"        \\cmidrule(lr){{3-{2 + num_methods}}}",
       "        & & " +
-      " & ".join(f"\\textbf{{{DISPLAY_NAMES.get(method, method)}}}" for method in method_list) +
-      " \\\\",
+      " & ".join(f"{{{_latex_method_name(method)}}}" for method in method_list) + " \\\\",
       "        \\midrule",
   ]
   for i, size in enumerate(sizes):
@@ -243,13 +381,21 @@ def write_sampling_table(
                       (summary["method"] == method) & (summary["metric"] == metric)].iloc[0]
         means.append(float(row["mean"]))
 
-      max_mean = max(means)
+      stochastic_means = [
+          mean for method, mean in zip(method_list, means)
+          if method not in DETERMINISTIC_BASELINES
+      ]
+      max_mean = max(stochastic_means) if stochastic_means else None
       cells = []
       for method, mean in zip(method_list, means):
         row = summary[(summary["size"] == size) & (summary["source"] == source) &
                       (summary["method"] == method) & (summary["metric"] == metric)].iloc[0]
         std = float(row["std"])
-        is_best = abs(mean - max_mean) < 1e-12
+        is_best = (
+            max_mean is not None and
+            method not in DETERMINISTIC_BASELINES and
+            abs(mean - max_mean) < 1e-12
+        )
         cells.append(_latex_cell(mean, std, bold=is_best))
 
       # LOGIC FOR GROUPING GRAPH SIZE:
@@ -267,6 +413,75 @@ def write_sampling_table(
     # Add a visual gap between n=5, n=16, etc.
     if i < len(sizes) - 1:
       lines.append("        \\addlinespace")
+  lines.extend([
+      "        \\bottomrule",
+      "    \\end{tabular}",
+      f"    \\caption{{{caption}}}",
+      f"    \\label{{{label}}}",
+      "\\end{table}",
+      "",
+  ])
+  output_path.write_text("\n".join(lines))
+
+
+def _summary_row(
+    summary: pd.DataFrame,
+    *,
+    size: int,
+    method: str,
+    source: str,
+    metric: str,
+) -> pd.Series:
+  rows = summary[(summary["size"] == size) & (summary["method"] == method) &
+                 (summary["source"] == source) & (summary["metric"] == metric)]
+  if rows.empty:
+    raise KeyError(f"Missing diversity metric {method}/{source}/{metric} for n={size}")
+  return rows.iloc[0]
+
+
+def write_diversity_table(
+    summary: pd.DataFrame,
+    methods: Iterable[str],
+    caption: str,
+    label: str,
+    output_path: Path,
+) -> None:
+  """Write a uniqueness/diversity table matching graph-accuracy layout."""
+  method_list = [method for method in methods if method not in ("Random", "Argmax")]
+  sizes = sorted(summary["size"].unique())
+  num_methods = len(method_list)
+  lines = [
+      "\\begin{table}[hbt!]",
+      "    \\centering",
+      "    \\small",
+      "    \\begin{tabular}{ll" + "c" * num_methods + "}",
+      "        \\toprule",
+      f"        \\multirow{{2}}{{*}}[-2pt]{{\\textbf{{Graph Size}}}} & "
+      f"\\multirow{{2}}{{*}}[-2pt]{{\\textbf{{Distribution}}}} & "
+      f"\\multicolumn{{{num_methods}}}{{c}}{{\\textbf{{Extraction Method}}}} \\\\",
+      f"        \\cmidrule(lr){{3-{2 + num_methods}}}",
+      "        & & " +
+      " & ".join(f"{{{_latex_method_name(method)}}}" for method in method_list) + " \\\\",
+      "        \\midrule",
+  ]
+
+  for size_ix, size in enumerate(sizes):
+    for source_ix, source in enumerate(SOURCES):
+      cells = []
+      for method in method_list:
+        row = _summary_row(
+            summary,
+            size=size,
+            method=method,
+            source=source,
+            metric="uniqueness",
+        )
+        cells.append(_latex_cell(float(row["mean"]), float(row["std"])))
+      size_col = f"\\multirow{{{len(SOURCES)}}}{{*}}{{$n={size}$}}" if source_ix == 0 else ""
+      lines.append(f"        {size_col} & {source} & " + " & ".join(cells) + " \\\\")
+    if size_ix < len(sizes) - 1:
+      lines.append("        \\addlinespace")
+
   lines.extend([
       "        \\bottomrule",
       "    \\end{tabular}",
@@ -377,6 +592,8 @@ def plot_train_kl_curves(root: Path, output_dir: Path) -> Path:
 def generate_assets(root: Path, output_dir: Path) -> None:
   """Generate all reusable evaluation assets."""
   generate_graph_accuracy_assets(root, output_dir)
+  generate_compare_graph_accuracy_asset(root, output_dir)
+  generate_diversity_assets(root, output_dir)
   kl_plot_path = plot_train_kl_curves(root, output_dir)
   print(f"Wrote train KL curve to {kl_plot_path}")
   validation_plot_path = plot_validation_curves(root, output_dir)
@@ -414,6 +631,77 @@ def generate_graph_accuracy_assets(
     pd.concat(all_summaries, ignore_index=True).to_csv(output_dir / f"graph-accuracy-summary.csv",
                                                        index=False)
   print(f"Wrote graph accuracy assets to {output_dir}")
+
+
+def generate_compare_graph_accuracy_asset(
+    root: Path,
+    output_dir: Path,
+) -> None:
+  """Generate the comparison-validator graph-accuracy table."""
+  output_dir.mkdir(parents=True, exist_ok=True)
+
+  for algorithm in ("bfs_multi", "dfs_multi"):
+    processor = "triplet-gmpnn"
+    methods = ALGORITHM_METHODS[algorithm]
+    summary = sampling_summary_for_eval_suffix(
+        root,
+        algorithm,
+        methods,
+        eval_suffix="n100_compare",
+        processor=processor,
+    )
+    if summary.empty:
+      print(f"Skipped {algorithm} compare graph accuracy: no n100_compare samples found")
+      return
+
+    summary.to_csv(
+        output_dir / f"{algorithm}-triplet-gmpnn-compare-graph-accuracy-summary.csv",
+        index=False,
+    )
+    write_sampling_table(
+        summary,
+        methods,
+        "accuracy",
+        (f"{ALGORITHM_DISPLAY_NAMES[algorithm]} graph accuracy under the comparison validator, averaged over "
+         "five seeds."),
+        f"tab:{algorithm}-triplet-gmpnn-compare-graph-accuracy",
+        output_dir / f"{algorithm}-triplet-gmpnn-compare-graph-accuracy.tex",
+    )
+    print(f"Wrote {algorithm} compare graph accuracy asset to {output_dir}")
+
+
+def generate_diversity_assets(
+    root: Path,
+    output_dir: Path,
+) -> None:
+  """Generate Table-1-style diversity tables from seed summaries."""
+  output_dir.mkdir(parents=True, exist_ok=True)
+
+  all_summaries = []
+  for algorithm, methods in ALGORITHM_METHODS.items():
+    for processor in PROCESSORS:
+      summary = diversity_summary(root, algorithm, methods, processor=processor)
+      if summary.empty:
+        print(f"Skipped {algorithm}: no {processor} diversity summaries found")
+        continue
+      all_summaries.append(summary)
+      stem = ALGORITHM_OUTPUT_NAMES[algorithm]
+      summary.to_csv(output_dir / f"{stem}-{processor}-diversity-summary.csv", index=False)
+      write_diversity_table(
+          summary,
+          methods,
+          (f"{ALGORITHM_DISPLAY_NAMES[algorithm]} uniqueness after repeated "
+           "stochastic extraction, averaged over five seeds."),
+          f"tab:{stem}-{processor}-diversity",
+          output_dir / f"{stem}-{processor}-diversity.tex",
+      )
+
+  if all_summaries:
+    pd.concat(all_summaries, ignore_index=True).to_csv(
+        output_dir / "diversity-summary.csv",
+        index=False,
+    )
+  print(f"Wrote diversity assets to {output_dir}")
 
 
 def parse_args() -> argparse.Namespace:
