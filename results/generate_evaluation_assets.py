@@ -60,10 +60,10 @@ def _configure_matplotlib(output_dir: Path):
   import matplotlib.pyplot as plt  # pylint: disable=import-outside-toplevel
 
   plt.rcParams.update({
-      "font.size": 9,
-      "axes.titlesize": 10,
-      "axes.labelsize": 9,
-      "legend.fontsize": 8,
+      # "font.size": 9,
+      # "axes.titlesize": 10,
+      # "axes.labelsize": 9,
+      # "legend.fontsize": 8,
       "figure.dpi": 160,
   })
   return plt
@@ -368,8 +368,8 @@ def write_sampling_table(
       f"        \\multirow{{2}}{{*}}[-2pt]{{\\textbf{{Graph Size}}}} & \\multirow{{2}}{{*}}[-2pt]{{\\textbf{{Distribution}}}} & "
       f"\\multicolumn{{{num_methods}}}{{c}}{{\\textbf{{Extraction Method}}}} \\\\",
       f"        \\cmidrule(lr){{3-{2 + num_methods}}}",
-      "        & & " +
-      " & ".join(f"{{{_latex_method_name(method)}}}" for method in method_list) + " \\\\",
+      "        & & " + " & ".join(f"{{{_latex_method_name(method)}}}" for method in method_list) +
+      " \\\\",
       "        \\midrule",
   ]
   for i, size in enumerate(sizes):
@@ -382,8 +382,7 @@ def write_sampling_table(
         means.append(float(row["mean"]))
 
       stochastic_means = [
-          mean for method, mean in zip(method_list, means)
-          if method not in DETERMINISTIC_BASELINES
+          mean for method, mean in zip(method_list, means) if method not in DETERMINISTIC_BASELINES
       ]
       max_mean = max(stochastic_means) if stochastic_means else None
       cells = []
@@ -391,11 +390,8 @@ def write_sampling_table(
         row = summary[(summary["size"] == size) & (summary["source"] == source) &
                       (summary["method"] == method) & (summary["metric"] == metric)].iloc[0]
         std = float(row["std"])
-        is_best = (
-            max_mean is not None and
-            method not in DETERMINISTIC_BASELINES and
-            abs(mean - max_mean) < 1e-12
-        )
+        is_best = (max_mean is not None and method not in DETERMINISTIC_BASELINES and
+                   abs(mean - max_mean) < 1e-12)
         cells.append(_latex_cell(mean, std, bold=is_best))
 
       # LOGIC FOR GROUPING GRAPH SIZE:
@@ -460,8 +456,8 @@ def write_diversity_table(
       f"\\multirow{{2}}{{*}}[-2pt]{{\\textbf{{Distribution}}}} & "
       f"\\multicolumn{{{num_methods}}}{{c}}{{\\textbf{{Extraction Method}}}} \\\\",
       f"        \\cmidrule(lr){{3-{2 + num_methods}}}",
-      "        & & " +
-      " & ".join(f"{{{_latex_method_name(method)}}}" for method in method_list) + " \\\\",
+      "        & & " + " & ".join(f"{{{_latex_method_name(method)}}}" for method in method_list) +
+      " \\\\",
       "        \\midrule",
   ]
 
@@ -690,7 +686,7 @@ def generate_diversity_assets(
       write_diversity_table(
           summary,
           methods,
-          (f"{ALGORITHM_DISPLAY_NAMES[algorithm]} uniqueness after repeated "
+          (f"{ALGORITHM_DISPLAY_NAMES[algorithm]} solution diversity after repeated "
            "stochastic extraction, averaged over five seeds."),
           f"tab:{stem}-{processor}-diversity",
           output_dir / f"{stem}-{processor}-diversity.tex",
@@ -721,6 +717,113 @@ def parse_args() -> argparse.Namespace:
   return parser.parse_args()
 
 
+def plot_grouped_bar_chart(output_dir: Path) -> None:
+
+  plt = _configure_matplotlib(output_dir)
+  # ----------------------------------------------------
+  # 1. USER DATA (Organized by Size across Algorithms)
+  # ----------------------------------------------------
+  # Data mapped to: [BFS value, MST-Prim value]
+  n5_accuracy = [1.0, 1.0]
+  n16_accuracy = [0.6520, 0.44]
+  n64_accuracy = [0.00, 0.878]
+
+  n5_errors = [0.0, 0.0]
+  n16_errors = [0.0228, 0.05]
+  n64_errors = [0.0, 0.0327]
+
+  # The 2 main groups on the X-axis
+  labels = ['BFS', 'MST-Prim']
+
+  # ----------------------------------------------------
+  # 2. CHART GEOMETRY & SETUP
+  # ----------------------------------------------------
+  x = np.arange(len(labels))  # Label locations: [0, 1]
+
+  # We have 3 bars per group now, so we make them slightly thinner
+  width = 0.23
+
+  fig, ax = plt.subplots()
+
+  # ----------------------------------------------------
+  # 3. PLOTTING THE BARS (3 sizes per algorithm group)
+  # ----------------------------------------------------
+  # n=5 bars: shifted left
+  rects1 = ax.bar(x - width,
+                  n5_accuracy,
+                  width,
+                  yerr=n5_errors,
+                  label='n=5',
+                  color='#C5CAE9',
+                  capsize=4,
+                  edgecolor='black',
+                  alpha=0.9)
+
+  # n=16 bars: centered right on the tick
+  rects2 = ax.bar(x,
+                  n16_accuracy,
+                  width,
+                  yerr=n16_errors,
+                  label='n=16',
+                  color='#5C6BC0',
+                  capsize=4,
+                  edgecolor='black',
+                  alpha=0.9)
+
+  # n=64 bars: shifted right
+  rects3 = ax.bar(x + width,
+                  n64_accuracy,
+                  width,
+                  yerr=n64_errors,
+                  label='n=64',
+                  color='#1A237E',
+                  capsize=4,
+                  edgecolor='black',
+                  alpha=0.9)
+
+  # ----------------------------------------------------
+  # 4. TEXT LABELS FOR ACCURACY (Option 1)
+  # ----------------------------------------------------
+  # Custom formatting function to clean up decimal lengths in academic plots
+  def fmt(val):
+    return "0.0" if val == 0 else ""
+
+  # Automatically add labels on top of (or at the base of) every single bar
+  for rects in [rects1, rects2, rects3]:
+    ax.bar_label(rects, padding=4, labels=[fmt(v) for v in rects.datavalues])
+
+  # ----------------------------------------------------
+  # 5. LABELS, TITLES, & CUSTOMIZATION
+  # ----------------------------------------------------
+  ax.set_xlabel('Algorithm', labelpad=10)
+  ax.set_ylabel('Graph Accuracy', labelpad=10)
+  # ax.set_title('Algorithm Accuracy Comparison by Graph Size', pad=15)
+
+  # Center the main X ticks under our 2 groups
+  ax.set_xticks(x)
+  ax.set_xticklabels(labels)
+
+  # Give the 0.0 baseline some visual breathing room
+  ax.set_ylim(0, 1.15)
+  ax.spines['bottom'].set_linewidth(1.2)
+
+  # Ensure y-axis gridlines stay behind the bars
+  ax.set_axisbelow(True)
+  ax.grid(axis='y', linestyle='--', alpha=0.5)
+
+  # Add a legend identifying the sizes
+  ax.legend(loc='upper right')
+
+  plt.tight_layout()
+
+  # ----------------------------------------------------
+  # 6. SAVE AS VECTOR GRAPHICS (PDF)
+  # ----------------------------------------------------
+  output_path = output_dir / "algorithm-accuracy-comparison.pdf"
+  plt.savefig(output_path, bbox_inches="tight")
+  plt.close()
+
+
 def main() -> None:
   args = parse_args()
   root = args.root.resolve()
@@ -728,6 +831,7 @@ def main() -> None:
   if output_dir is None:
     output_dir = root / "evaluation_assets"
   generate_assets(root, output_dir.resolve())
+  plot_grouped_bar_chart(output_dir.resolve())
 
 
 if __name__ == "__main__":

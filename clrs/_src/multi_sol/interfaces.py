@@ -82,7 +82,7 @@ class Generator:
 
 @dataclasses.dataclass(frozen=True)
 class MultiSolAlgorithm:
-  """Metadata for one multi-solution algorithm."""
+  """Definition object for a multi-solution algorithm."""
 
   name: str
   base_name: str
